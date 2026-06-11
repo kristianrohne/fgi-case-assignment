@@ -1,69 +1,46 @@
 /**
- * HierarchyView — interactive ownership-tree for FGI subsidiaries.
+ * HierarchyView — collapsible ownership tree for FGI subsidiaries.
  *
- * Confirmed parent→child edges are drawn as solid grey lines.
- * Suspected edges (broken parent_entity_id fuzzy-matched to a real entity)
- * are drawn as dashed amber lines — never auto-corrected, only flagged.
- *
- * Controls: drag to pan · scroll to zoom · click node to expand/collapse
+ * Replaces the pan/zoom SVG approach (hard to navigate with 100 nodes) with
+ * an indented list — like a file explorer. Colour-coded by asset_class,
+ * searchable (matching nodes + their ancestors stay visible), orphan nodes
+ * flagged with ⚠ and a dashed-border row.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { Entity } from "../types";
 import { Spinner } from "./ui";
 
-// ── Layout constants ───────────────────────────────────────────────────────
-const NW = 152;
-const NH = 60;
-const H_GAP = 22;
-const V_GAP = 74;
-
-// ── Asset-class colours ────────────────────────────────────────────────────
-type Swatch = { fill: string; stroke: string; title: string; sub: string };
-
+// ── Asset-class colour palette ─────────────────────────────────────────────
+type Swatch = { dot: string; bg: string; text: string };
 const PALETTE: Record<string, Swatch> = {
-  "Real Estate":    { fill: "#d1fae5", stroke: "#059669", title: "#064e3b", sub: "#047857" },
-  "Infrastructure": { fill: "#dbeafe", stroke: "#3b82f6", title: "#1e3a8a", sub: "#1d4ed8" },
-  "Private Equity": { fill: "#ede9fe", stroke: "#8b5cf6", title: "#3b0764", sub: "#6d28d9" },
-  "Equity":         { fill: "#fef3c7", stroke: "#f59e0b", title: "#78350f", sub: "#b45309" },
-  "Fixed Income":   { fill: "#fce7f3", stroke: "#ec4899", title: "#831843", sub: "#be185d" },
-  "Cash":           { fill: "#f0fdf4", stroke: "#22c55e", title: "#14532d", sub: "#16a34a" },
+  "Real Estate":    { dot: "#059669", bg: "#d1fae5", text: "#064e3b" },
+  "Infrastructure": { dot: "#3b82f6", bg: "#dbeafe", text: "#1e3a8a" },
+  "Private Equity": { dot: "#8b5cf6", bg: "#ede9fe", text: "#4c1d95" },
+  "Equity":         { dot: "#f59e0b", bg: "#fef3c7", text: "#78350f" },
+  "Fixed Income":   { dot: "#ec4899", bg: "#fce7f3", text: "#831843" },
+  "Cash":           { dot: "#22c55e", bg: "#f0fdf4", text: "#14532d" },
 };
-const DEF: Swatch = { fill: "#f8fafc", stroke: "#94a3b8", title: "#1e293b", sub: "#64748b" };
-const csw = (ac: string | null | undefined): Swatch => (ac && PALETTE[ac]) ?? DEF;
+const DEF: Swatch = { dot: "#94a3b8", bg: "#f1f5f9", text: "#475569" };
+const sw = (ac: string | null | undefined): Swatch => (ac && PALETTE[ac]) ?? DEF;
 
 // ── Tree types ─────────────────────────────────────────────────────────────
 interface TNode {
   e: Entity;
-  children: TNode[];           // confirmed children
-  suspected: TNode[];          // orphan children fuzzy-matched here
-  x: number;
-  y: number;
-  sw: number;                  // horizontal space this subtree needs
-  isOrphan?: boolean;          // this node's own parent ref is broken
-  brokenParentRef?: string;    // the original broken parent_entity_id value
+  children: TNode[];
+  suspected: TNode[];   // orphan children fuzzy-matched here
+  isOrphan?: boolean;
+  brokenParentRef?: string;
 }
 
-interface EdgeInfo {
-  parent: TNode;
-  child: TNode;
-  suspected: boolean;
-}
-
-// ── Fuzzy parent lookup ────────────────────────────────────────────────────
-/**
- * Given a broken parent_entity_id (e.g. "FGI-099X"), find the real entity
- * whose ID is the longest prefix of that broken ref (e.g. "FGI-099").
- * Returns null if no candidate found.
- */
+// ── Fuzzy parent lookup (longest-prefix match) ────────────────────────────
 function findLikelyParent(brokenId: string, byId: Map<string, Entity>): Entity | null {
   let best: Entity | null = null;
   let bestLen = 0;
   for (const [id, entity] of byId) {
     if (brokenId.startsWith(id) && id.length > bestLen) {
-      best = entity;
-      bestLen = id.length;
+      best = entity; bestLen = id.length;
     }
   }
   return best;
@@ -71,56 +48,42 @@ function findLikelyParent(brokenId: string, byId: Map<string, Entity>): Entity |
 
 // ── Forest builder ─────────────────────────────────────────────────────────
 function buildForest(entities: Entity[]): TNode[] {
-  const byId = new Map(entities.map(e => [e.entity_id, e]));
-  const childMap    = new Map<string, string[]>(); // real parent → [child ids]
-  const suspectedMap= new Map<string, string[]>(); // suspected parent → [orphan ids]
-  const brokenRefs  = new Map<string, string>();   // orphan id → its broken parent ref
-  const isChild     = new Set<string>();
+  const byId       = new Map(entities.map(e => [e.entity_id, e]));
+  const childMap   = new Map<string, string[]>();
+  const suspMap    = new Map<string, string[]>();
+  const brokenRefs = new Map<string, string>();
+  const isChild    = new Set<string>();
 
   for (const e of entities) {
     const pid = e.parent_entity_id;
     if (!pid) continue;
-
     if (byId.has(pid)) {
-      // Confirmed relationship
       if (!childMap.has(pid)) childMap.set(pid, []);
       childMap.get(pid)!.push(e.entity_id);
       isChild.add(e.entity_id);
     } else {
-      // Broken reference — look for a likely parent by prefix match
       const likely = findLikelyParent(pid, byId);
       if (likely) {
-        if (!suspectedMap.has(likely.entity_id)) suspectedMap.set(likely.entity_id, []);
-        suspectedMap.get(likely.entity_id)!.push(e.entity_id);
+        if (!suspMap.has(likely.entity_id)) suspMap.set(likely.entity_id, []);
+        suspMap.get(likely.entity_id)!.push(e.entity_id);
         brokenRefs.set(e.entity_id, pid);
-        isChild.add(e.entity_id); // include in tree as child, not a root
+        isChild.add(e.entity_id);
       }
-      // If no match at all, entity floats as an isolated root (rare)
     }
   }
 
   function build(id: string, seen: Set<string>): TNode | null {
-    if (seen.has(id)) return null; // cycle guard
+    if (seen.has(id)) return null;
     const e = byId.get(id);
     if (!e) return null;
     const next = new Set(seen); next.add(id);
-
-    const children = (childMap.get(id) ?? [])
-      .map(cid => build(cid, next))
-      .filter((n): n is TNode => n !== null);
-
-    const suspected = (suspectedMap.get(id) ?? [])
-      .map(cid => {
-        const node = build(cid, next);
-        if (node) {
-          node.isOrphan = true;
-          node.brokenParentRef = brokenRefs.get(cid);
-        }
-        return node;
-      })
-      .filter((n): n is TNode => n !== null);
-
-    return { e, children, suspected, x: 0, y: 0, sw: 0 };
+    const children  = (childMap.get(id) ?? []).map(c => build(c, next)).filter((n): n is TNode => n !== null);
+    const suspected = (suspMap.get(id) ?? []).map(c => {
+      const node = build(c, next);
+      if (node) { node.isOrphan = true; node.brokenParentRef = brokenRefs.get(c); }
+      return node;
+    }).filter((n): n is TNode => n !== null);
+    return { e, children, suspected };
   }
 
   return entities
@@ -129,54 +92,26 @@ function buildForest(entities: Entity[]): TNode[] {
     .filter((n): n is TNode => n !== null);
 }
 
-// ── Layout ─────────────────────────────────────────────────────────────────
-function layoutNode(n: TNode, depth: number, left: number, col: Set<string>): void {
-  n.y = depth * (NH + V_GAP);
-  const all = [...n.children, ...n.suspected];
-  if (col.has(n.e.entity_id) || all.length === 0) {
-    n.sw = NW + H_GAP;
-    n.x = left + NW / 2;
-    return;
-  }
-  let cur = left;
-  for (const c of all) { layoutNode(c, depth + 1, cur, col); cur += c.sw; }
-  n.sw = cur - left;
-  n.x = (all[0].x + all[all.length - 1].x) / 2;
+// ── Search helpers ─────────────────────────────────────────────────────────
+function nodeMatches(n: TNode, q: string): boolean {
+  return (
+    (n.e.entity_name ?? "").toLowerCase().includes(q) ||
+    n.e.entity_id.toLowerCase().includes(q) ||
+    (n.e.jurisdiction ?? "").toLowerCase().includes(q) ||
+    (n.e.asset_class ?? "").toLowerCase().includes(q) ||
+    (n.e.status ?? "").toLowerCase().includes(q)
+  );
 }
 
-function visibleNodes(n: TNode, col: Set<string>): TNode[] {
-  const out: TNode[] = [n];
-  if (!col.has(n.e.entity_id))
-    for (const c of [...n.children, ...n.suspected]) out.push(...visibleNodes(c, col));
-  return out;
+/** True if this node or any descendant matches the query. */
+function subtreeMatches(n: TNode, q: string): boolean {
+  if (!q) return true;
+  if (nodeMatches(n, q)) return true;
+  return [...n.children, ...n.suspected].some(c => subtreeMatches(c, q));
 }
 
-function visibleEdges(n: TNode, col: Set<string>): EdgeInfo[] {
-  if (col.has(n.e.entity_id)) return [];
-  const out: EdgeInfo[] = [];
-  for (const c of n.children) {
-    out.push({ parent: n, child: c, suspected: false });
-    out.push(...visibleEdges(c, col));
-  }
-  for (const c of n.suspected) {
-    out.push({ parent: n, child: c, suspected: true });
-    out.push(...visibleEdges(c, col));
-  }
-  return out;
-}
-
-function countDesc(n: TNode): number {
-  return [...n.children, ...n.suspected].reduce((s, c) => s + 1 + countDesc(c), 0);
-}
-
-function bezier(p: TNode, c: TNode): string {
-  const x1 = p.x, y1 = p.y + NH, x2 = c.x, y2 = c.y, my = (y1 + y2) / 2;
-  return `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`;
-}
-
-function clip(s: string | null | undefined, n: number): string {
-  if (!s) return "—";
-  return s.length <= n ? s : s.slice(0, n - 1) + "…";
+function countAll(n: TNode): number {
+  return 1 + [...n.children, ...n.suspected].reduce((s, c) => s + countAll(c), 0);
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -185,14 +120,7 @@ export function HierarchyView() {
   const [loading, setLoading]   = useState(true);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [inited, setInited]     = useState(false);
-
-  const [tx, setTx] = useState(40);
-  const [ty, setTy] = useState(30);
-  const [scale, setScale] = useState(0.85);
-  const dragRef  = useRef(false);
-  const lastPos  = useRef({ x: 0, y: 0 });
-
-  const [tip, setTip] = useState<{ e: Entity; isOrphan?: boolean; brokenRef?: string; mx: number; my: number } | null>(null);
+  const [search, setSearch]     = useState("");
 
   useEffect(() => {
     api.entities().then(list => { setEntities(list); setLoading(false); });
@@ -206,7 +134,7 @@ export function HierarchyView() {
     return s;
   }, [entities]);
 
-  // Init: collapse depth ≥ 1 nodes that have children (show roots + direct children)
+  // Start: collapse depth ≥ 1 nodes (show roots + direct children)
   useEffect(() => {
     if (inited || forest.length === 0) return;
     const ids = new Set<string>();
@@ -220,58 +148,49 @@ export function HierarchyView() {
     setInited(true);
   }, [forest, inited]);
 
-  const laidOut = useMemo(() => {
-    let left = H_GAP;
-    for (const root of forest) { layoutNode(root, 0, left, collapsed); left += root.sw + H_GAP; }
-    return [...forest];
-  }, [forest, collapsed]);
+  const q = search.trim().toLowerCase();
 
-  const nodes = useMemo(() => laidOut.flatMap(r => visibleNodes(r, collapsed)), [laidOut, collapsed]);
-  const edges = useMemo(() => laidOut.flatMap(r => visibleEdges(r, collapsed)), [laidOut, collapsed]);
-
-  const suspectedCount = useMemo(() => nodes.filter(n => n.isOrphan).length, [nodes]);
-
-  const maxVisDepth = useMemo(() => {
-    function d(n: TNode): number {
-      if (collapsed.has(n.e.entity_id) || [...n.children, ...n.suspected].length === 0) return 0;
-      return 1 + Math.max(0, ...[...n.children, ...n.suspected].map(d));
-    }
-    return Math.max(0, ...laidOut.map(d));
-  }, [laidOut, collapsed]);
-
-  const canvasW = laidOut.reduce((s, r) => s + r.sw, 0) + 2 * H_GAP;
-  const canvasH = (maxVisDepth + 1) * (NH + V_GAP) + V_GAP;
+  const orphanCount = useMemo(
+    () => entities.filter(e => {
+      const pid = e.parent_entity_id;
+      return pid && !entities.some(x => x.entity_id === pid);
+    }).length,
+    [entities],
+  );
 
   function toggle(id: string) {
     setCollapsed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
 
-  function onMouseDown(e: React.MouseEvent<SVGSVGElement>) {
-    if ((e.target as Element).closest("[data-node]")) return;
-    dragRef.current = true;
-    lastPos.current = { x: e.clientX, y: e.clientY };
-  }
-  function onMouseMove(e: React.MouseEvent<SVGSVGElement>) {
-    if (!dragRef.current) return;
-    setTx(t => t + e.clientX - lastPos.current.x);
-    setTy(t => t + e.clientY - lastPos.current.y);
-    lastPos.current = { x: e.clientX, y: e.clientY };
-  }
-  function stopDrag() { dragRef.current = false; }
-
-  function onWheel(e: React.WheelEvent<SVGSVGElement>) {
-    e.preventDefault();
-    setScale(s => Math.max(0.12, Math.min(3, s * (e.deltaY > 0 ? 0.9 : 1.1))));
-  }
-
   if (loading) return <Spinner label="Loading entity hierarchy…" />;
-  if (entities.length === 0) return <p className="text-center text-slate-400 py-12">No entities loaded.</p>;
+  if (entities.length === 0) return <p className="text-center text-slate-400 py-12">No entities.</p>;
 
   return (
     <div className="space-y-3">
 
-      {/* ── Controls ────────────────────────────────────────────────── */}
+      {/* Controls */}
       <div className="flex flex-wrap items-center gap-2">
+        {/* Search */}
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search name, ID, jurisdiction, asset class…"
+            className="w-72 rounded-lg border border-slate-300 bg-white pl-9 pr-8 py-1.5 text-sm placeholder-slate-400"
+          />
+          {search && (
+            <button onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs">
+              ✕
+            </button>
+          )}
+        </div>
+
         <button onClick={() => setCollapsed(new Set())}
           className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition">
           Expand all
@@ -281,252 +200,205 @@ export function HierarchyView() {
           Collapse all
         </button>
 
-        <span className="text-xs text-slate-400">
-          {nodes.length} / {entities.length} entities visible
-        </span>
-
-        {/* Suspected-connection callout */}
-        {suspectedCount > 0 && (
+        {orphanCount > 0 && (
           <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-            <span>⚠</span>
-            {suspectedCount} node{suspectedCount > 1 ? "s" : ""} with broken parent ref — dashed line = suspected connection
+            ⚠ {orphanCount} broken parent ref{orphanCount > 1 ? "s" : ""}
           </span>
         )}
 
         {/* Legend */}
         <div className="ml-auto flex flex-wrap items-center gap-3">
           {(Object.entries(PALETTE) as [string, Swatch][]).map(([cls, c]) => (
-            <span key={cls} className="flex items-center gap-1.5 text-xs font-medium" style={{ color: c.title }}>
-              <span className="inline-block h-3 w-3 shrink-0 rounded-sm"
-                style={{ background: c.fill, border: `1.5px solid ${c.stroke}` }} />
+            <span key={cls} className="flex items-center gap-1.5 text-xs" style={{ color: c.text }}>
+              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ background: c.dot }} />
               {cls}
             </span>
           ))}
-          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-            <span className="inline-block h-3 w-3 shrink-0 rounded-sm bg-slate-100 border border-slate-300" />
+          <span className="flex items-center gap-1.5 text-xs text-slate-500">
+            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-slate-300" />
             Other
           </span>
         </div>
       </div>
 
-      {/* ── SVG canvas ────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50" style={{ height: 600 }}>
-        <svg
-          width="100%" height="100%"
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={stopDrag}
-          onMouseLeave={stopDrag}
-          onWheel={onWheel}
-          style={{ cursor: "grab", userSelect: "none" }}
-        >
-          <defs>
-            {/* Amber dashed marker for suspected edges */}
-            <marker id="arrow-suspected" markerWidth="6" markerHeight="6"
-              refX="5" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L6,3 z" fill="#f59e0b" opacity="0.7" />
-            </marker>
-          </defs>
-
-          <g transform={`translate(${tx},${ty}) scale(${scale})`}>
-            {/* ── Edges ──────────────────────────────────────────── */}
-            {edges.map((edge, i) =>
-              edge.suspected ? (
-                // Dashed amber line for suspected/fuzzy connections
-                <path key={i} d={bezier(edge.parent, edge.child)}
-                  fill="none"
-                  stroke="#f59e0b"
-                  strokeWidth={1.5}
-                  strokeDasharray="7 4"
-                  opacity={0.8}
-                  markerEnd="url(#arrow-suspected)"
-                />
-              ) : (
-                // Solid grey for confirmed connections
-                <path key={i} d={bezier(edge.parent, edge.child)}
-                  fill="none" stroke="#cbd5e1" strokeWidth={1.5} strokeLinecap="round" />
-              )
-            )}
-
-            {/* ── Nodes ──────────────────────────────────────────── */}
-            {nodes.map(n => {
-              const s = csw(n.e.asset_class);
-              const hasKids = [...n.children, ...n.suspected].length > 0;
-              const isCol   = collapsed.has(n.e.entity_id);
-              const desc    = countDesc(n);
-
-              return (
-                <g key={n.e.entity_id} data-node="1"
-                  transform={`translate(${n.x - NW / 2},${n.y})`}
-                  onClick={() => hasKids && toggle(n.e.entity_id)}
-                  onMouseEnter={ev => setTip({ e: n.e, isOrphan: n.isOrphan, brokenRef: n.brokenParentRef, mx: ev.clientX, my: ev.clientY })}
-                  onMouseMove={ev => setTip(t => t ? { ...t, mx: ev.clientX, my: ev.clientY } : null)}
-                  onMouseLeave={() => setTip(null)}
-                  style={{ cursor: hasKids ? "pointer" : "default" }}
-                >
-                  {/* Drop shadow */}
-                  <rect x={2} y={3} width={NW} height={NH} rx={9} fill="rgba(0,0,0,0.07)" />
-
-                  {/* Card — orphan nodes get an amber outline */}
-                  <rect width={NW} height={NH} rx={9}
-                    fill={s.fill}
-                    stroke={n.isOrphan ? "#f59e0b" : s.stroke}
-                    strokeWidth={n.isOrphan ? 2 : 1.5}
-                    strokeDasharray={n.isOrphan ? "5 3" : undefined}
-                  />
-
-                  {/* Entity name */}
-                  <text x={NW / 2} y={20} textAnchor="middle"
-                    fontSize={11} fontWeight="700" fill={s.title}
-                    fontFamily="ui-sans-serif,system-ui,sans-serif">
-                    {clip(n.e.entity_name, 20)}
-                  </text>
-                  {/* Entity ID */}
-                  <text x={NW / 2} y={34} textAnchor="middle"
-                    fontSize={9} fill={s.sub}
-                    fontFamily="ui-monospace,SFMono-Regular,monospace">
-                    {n.e.entity_id}
-                  </text>
-                  {/* Jurisdiction */}
-                  <text x={NW / 2} y={47} textAnchor="middle"
-                    fontSize={9} fill={s.sub} opacity={0.75}
-                    fontFamily="ui-sans-serif,system-ui,sans-serif">
-                    {clip(n.e.jurisdiction, 24)}
-                  </text>
-
-                  {/* Expand/collapse badge (top-right) */}
-                  {hasKids && (
-                    <g transform={`translate(${NW - 22},4)`}>
-                      <rect width={18} height={14} rx={4} fill={s.stroke} opacity={0.18} />
-                      <text x={9} y={11} textAnchor="middle"
-                        fontSize={8.5} fontWeight="700" fill={s.stroke}
-                        fontFamily="ui-sans-serif,system-ui,sans-serif">
-                        {isCol ? `+${desc}` : "−"}
-                      </text>
-                    </g>
-                  )}
-
-                  {/* ⚠ badge for broken-parent-ref nodes (top-left) */}
-                  {n.isOrphan && (
-                    <g transform="translate(4,4)">
-                      <rect width={16} height={14} rx={4} fill="#fef3c7" stroke="#f59e0b" strokeWidth={1} />
-                      <text x={8} y={11} textAnchor="middle"
-                        fontSize={9} fill="#b45309"
-                        fontFamily="ui-sans-serif,system-ui,sans-serif">
-                        ⚠
-                      </text>
-                    </g>
-                  )}
-
-                  {/* Ownership % (bottom-left) */}
-                  {n.e.ownership_pct != null && (
-                    <text x={6} y={NH - 5} textAnchor="start"
-                      fontSize={8} fill={s.sub} opacity={0.7}
-                      fontFamily="ui-monospace,SFMono-Regular,monospace">
-                      {n.e.ownership_pct}%
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-
-        {/* Zoom controls */}
-        <div className="absolute bottom-3 right-3 flex flex-col gap-1">
-          {([
-            { label: "+", action: () => setScale(s => Math.min(3, s * 1.25)) },
-            { label: "−", action: () => setScale(s => Math.max(0.12, s * 0.8)) },
-            { label: "⊡", action: () => { setScale(0.85); setTx(40); setTy(30); } },
-          ] as const).map(({ label, action }) => (
-            <button key={label} onClick={action}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 transition">
-              {label}
-            </button>
-          ))}
+      {/* Tree */}
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="divide-y divide-slate-50">
+          {forest.map(root =>
+            subtreeMatches(root, q) ? (
+              <TreeNode
+                key={root.e.entity_id}
+                node={root}
+                depth={0}
+                collapsed={collapsed}
+                onToggle={toggle}
+                q={q}
+                isLast={false}
+              />
+            ) : null
+          )}
         </div>
-
-        {/* Canvas size hint */}
-        <div className="absolute bottom-3 left-3 text-[10px] text-slate-400 select-none">
-          {Math.round(canvasW)} × {Math.round(canvasH)} pt &nbsp;·&nbsp; {Math.round(scale * 100)}%
-        </div>
+        {q && forest.every(r => !subtreeMatches(r, q)) && (
+          <p className="px-6 py-8 text-center text-sm text-slate-400">
+            No entities match <span className="font-medium text-slate-600">"{search}"</span>
+          </p>
+        )}
       </div>
-
-      {/* Hover tooltip */}
-      {tip && <NodeTooltip entity={tip.e} isOrphan={tip.isOrphan} brokenRef={tip.brokenRef} mx={tip.mx} my={tip.my} />}
     </div>
   );
 }
 
-// ── Tooltip ────────────────────────────────────────────────────────────────
-function NodeTooltip({
-  entity: e, isOrphan, brokenRef, mx, my,
+// ── Tree row ───────────────────────────────────────────────────────────────
+function TreeNode({
+  node: n, depth, collapsed, onToggle, q, isLast,
 }: {
-  entity: Entity; isOrphan?: boolean; brokenRef?: string; mx: number; my: number;
+  node: TNode;
+  depth: number;
+  collapsed: Set<string>;
+  onToggle: (id: string) => void;
+  q: string;
+  isLast: boolean;
 }) {
-  const s = csw(e.asset_class);
-  const flipX = mx > window.innerWidth - 280;
-  const style: React.CSSProperties = {
-    position: "fixed",
-    top: Math.min(my - 8, window.innerHeight - 290),
-    ...(flipX ? { right: window.innerWidth - mx + 12 } : { left: mx + 14 }),
-    zIndex: 50,
-    maxWidth: 264,
-    pointerEvents: "none",
-  };
-
-  const rows: [string, string | null | undefined][] = [
-    ["Type",        e.entity_type],
-    ["Asset class", e.asset_class],
-    ["Status",      e.status],
-    ["Ownership",   e.ownership_pct != null ? `${e.ownership_pct}%` : null],
-    ["Filing",      e.annual_filing_status],
-    ["Filing due",  e.annual_filing_due],
-    ["Mandate exp", e.board_mandate_expiry],
-    ["Agent",       e.registered_agent],
-    ["Board",       e.board_members.length > 0
-      ? e.board_members.slice(0, 3).join(", ") + (e.board_members.length > 3 ? ` +${e.board_members.length - 3}` : "")
-      : null],
-  ];
+  const all      = [...n.children, ...n.suspected];
+  const hasKids  = all.length > 0;
+  const isCol    = collapsed.has(n.e.entity_id);
+  const swatch   = sw(n.e.asset_class);
+  const matches  = q ? nodeMatches(n, q) : false;
+  const visible  = all.filter(c => !q || subtreeMatches(c, q));
 
   return (
-    <div style={style} className="rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden text-xs">
-      {/* Header */}
-      <div className="px-3 py-2" style={{ background: s.fill, borderBottom: `1px solid ${s.stroke}` }}>
-        <div className="font-semibold" style={{ color: s.title }}>{e.entity_name ?? "—"}</div>
-        <div className="font-mono text-[10px] mt-0.5" style={{ color: s.sub }}>{e.entity_id}</div>
-        {e.jurisdiction && <div className="text-[10px] mt-0.5" style={{ color: s.sub }}>{e.jurisdiction}</div>}
+    <div>
+      {/* Row */}
+      <div
+        className={`group flex items-center gap-2 px-3 py-2 transition-colors ${
+          matches ? "bg-indigo-50" : "hover:bg-slate-50"
+        } ${n.isOrphan ? "border-l-2 border-amber-300" : depth === 0 ? "border-l-2 border-transparent" : "border-l-2 border-transparent"}`}
+        style={{ paddingLeft: `${12 + depth * 28}px` }}
+      >
+        {/* Expand/collapse chevron or leaf dot */}
+        <span className="w-5 shrink-0 flex items-center justify-center">
+          {hasKids ? (
+            <button
+              onClick={() => onToggle(n.e.entity_id)}
+              className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition"
+            >
+              <svg className={`h-3 w-3 transition-transform ${!isCol ? "rotate-90" : ""}`}
+                fill="none" viewBox="0 0 12 12" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 3l4 3-4 3" />
+              </svg>
+            </button>
+          ) : (
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-200 mx-auto" />
+          )}
+        </span>
+
+        {/* Asset-class colour dot */}
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: swatch.dot }} />
+
+        {/* Name */}
+        <span className={`font-medium text-sm ${matches ? "text-indigo-900" : "text-slate-800"}`}>
+          {highlight(n.e.entity_name ?? "—", q)}
+        </span>
+
+        {/* Entity ID */}
+        <span className="font-mono text-xs text-slate-400">
+          {highlight(n.e.entity_id, q)}
+        </span>
+
+        {/* Orphan warning */}
+        {n.isOrphan && (
+          <span
+            title={`Parent ref "${n.brokenParentRef}" not found in register — connected here by ID similarity. Verify manually.`}
+            className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 cursor-help"
+          >
+            ⚠ {n.brokenParentRef}
+          </span>
+        )}
+
+        {/* Spacer */}
+        <span className="flex-1" />
+
+        {/* Jurisdiction */}
+        {n.e.jurisdiction && (
+          <span className="hidden text-xs text-slate-400 sm:block">
+            {highlight(n.e.jurisdiction, q)}
+          </span>
+        )}
+
+        {/* Ownership */}
+        {n.e.ownership_pct != null && (
+          <span className="text-xs text-slate-400">{n.e.ownership_pct}%</span>
+        )}
+
+        {/* Asset class pill */}
+        {n.e.asset_class && (
+          <span className="hidden rounded-full px-2 py-0.5 text-[10px] font-medium lg:block"
+            style={{ background: swatch.bg, color: swatch.text }}>
+            {n.e.asset_class}
+          </span>
+        )}
+
+        {/* Status pill */}
+        <StatusDot status={n.e.status} />
+
+        {/* Collapsed child count */}
+        {isCol && hasKids && (
+          <span className="text-xs text-slate-400">
+            +{countAll(n) - 1}
+          </span>
+        )}
       </div>
 
-      {/* Broken parent warning */}
-      {isOrphan && brokenRef && (
-        <div className="flex items-start gap-2 border-b border-amber-100 bg-amber-50 px-3 py-2 text-[10px] text-amber-800">
-          <span className="mt-0.5 shrink-0">⚠</span>
-          <div>
-            <span className="font-semibold">Broken parent reference: </span>
-            <span className="font-mono">{brokenRef}</span>
-            <span> — not found in register. Connected here by ID similarity. Verify manually.</span>
-          </div>
+      {/* Children */}
+      {!isCol && visible.length > 0 && (
+        <div className="relative">
+          {/* Vertical guide line */}
+          <div
+            className="absolute top-0 bottom-0 w-px bg-slate-100"
+            style={{ left: `${12 + depth * 28 + 14}px` }}
+          />
+          {visible.map((child, idx) =>
+            <TreeNode
+              key={child.e.entity_id}
+              node={child}
+              depth={depth + 1}
+              collapsed={collapsed}
+              onToggle={onToggle}
+              q={q}
+              isLast={idx === visible.length - 1}
+            />
+          )}
         </div>
       )}
-
-      {/* Details */}
-      <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 px-3 py-2">
-        <div className="contents">
-          <dt className="text-slate-400 whitespace-nowrap py-0.5">Parent</dt>
-          <dd className="py-0.5 font-mono text-slate-700">
-            {e.parent_entity_id ?? <span className="text-slate-300 font-sans">— root</span>}
-          </dd>
-        </div>
-        {rows
-          .filter(([, v]) => v != null && v !== "")
-          .map(([k, v]) => (
-            <div key={k} className="contents">
-              <dt className="text-slate-400 whitespace-nowrap py-0.5">{k}</dt>
-              <dd className="truncate text-slate-700 py-0.5">{v}</dd>
-            </div>
-          ))}
-      </dl>
     </div>
+  );
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+/** Highlight matching substring in yellow. */
+function highlight(text: string, q: string): React.ReactNode {
+  if (!q || !text.toLowerCase().includes(q)) return text;
+  const idx = text.toLowerCase().indexOf(q);
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="rounded bg-yellow-200 text-yellow-900 px-0.5">{text.slice(idx, idx + q.length)}</mark>
+      {text.slice(idx + q.length)}
+    </>
+  );
+}
+
+function StatusDot({ status }: { status: string | null }) {
+  if (!status) return null;
+  const cls =
+    status === "Active"    ? "bg-emerald-500" :
+    status === "Dissolved" ? "bg-red-400" :
+    status === "Pending"   ? "bg-amber-400" :
+                             "bg-slate-300";
+  return (
+    <span title={status}
+      className={`h-2 w-2 shrink-0 rounded-full ${cls}`} />
   );
 }
