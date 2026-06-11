@@ -1,0 +1,117 @@
+"""FastAPI surface.
+
+Endpoints split deterministic data (instant, no LLM) from the LLM-backed
+digest, so the UI stays responsive and the costly call only happens on the
+explicit "fetch digest" action.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+
+from .config import settings
+from .ingestion import IngestResult, ingest
+from .models import BoardUpdate, Digest, Entity, Finding, Letter
+from .services.digest import build_digest, compute_findings
+
+app = FastAPI(title="FGI Subsidiary Governance API", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@lru_cache(maxsize=1)
+def _data() -> IngestResult:
+    """Ingest once and reuse. Cleared via /api/reload if data changes."""
+    return ingest()
+
+
+@app.get("/api/health")
+def health() -> dict:
+    return {"status": "ok"}
+
+
+@app.get("/api/meta")
+def meta() -> dict:
+    return {
+        "as_of": settings.today.isoformat(),
+        "llm_provider": settings.llm_provider,
+        "entity_count": len(_data().entities),
+    }
+
+
+@app.post("/api/reload")
+def reload_data() -> dict:
+    _data.cache_clear()
+    n = len(_data().entities)
+    return {"reloaded": True, "entity_count": n}
+
+
+@app.get("/api/entities", response_model=list[Entity])
+def list_entities(
+    jurisdiction: str | None = None,
+    status: str | None = None,
+    asset_class: str | None = None,
+    q: str | None = Query(None, description="case-insensitive name/id search"),
+) -> list[Entity]:
+    items = _data().entities
+    if jurisdiction:
+        items = [e for e in items if e.jurisdiction == jurisdiction]
+    if status:
+        items = [e for e in items if e.status == status]
+    if asset_class:
+        items = [e for e in items if e.asset_class == asset_class]
+    if q:
+        ql = q.lower()
+        items = [
+            e
+            for e in items
+            if ql in (e.entity_name or "").lower() or ql in e.entity_id.lower()
+        ]
+    return items
+
+
+@app.get("/api/entities/{entity_id}", response_model=Entity)
+def get_entity(entity_id: str) -> Entity:
+    entity = _data().by_id.get(entity_id)
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"Unknown entity {entity_id}")
+    return entity
+
+
+@app.get("/api/board-updates", response_model=list[BoardUpdate])
+def list_board_updates(unmatched_only: bool = False) -> list[BoardUpdate]:
+    items = _data().board_updates
+    if unmatched_only:
+        items = [u for u in items if not u.matched]
+    return items
+
+
+@app.get("/api/letters", response_model=list[Letter])
+def list_letters() -> list[Letter]:
+    """The agent letters with their extracted, register-matched claims."""
+    return _data().letters
+
+
+@app.get("/api/findings", response_model=list[Finding])
+def list_findings(severity: str | None = None, category: str | None = None) -> list[Finding]:
+    """Deterministic findings only — fast, no LLM, no recommendations."""
+    findings = compute_findings(_data(), settings.today)
+    if severity:
+        findings = [f for f in findings if f.severity.value.lower() == severity.lower()]
+    if category:
+        findings = [f for f in findings if f.category == category]
+    return findings
+
+
+@app.post("/api/digest", response_model=Digest)
+def digest(use_llm: bool = True) -> Digest:
+    """The headline action: full pipeline + LLM summary and recommendations."""
+    return build_digest(_data(), use_llm=use_llm)
