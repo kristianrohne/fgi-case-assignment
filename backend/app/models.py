@@ -133,6 +133,20 @@ class Digest(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
 
 
+class ReviewNote(BaseModel):
+    """An open-ended observation from the LLM's advisory review.
+
+    Deliberately separate from `Finding`: these are *suggestions* from a model
+    looking for things the deterministic rules might have missed. Lower trust,
+    shown apart, never mixed into the verified findings.
+    """
+
+    title: str
+    detail: str
+    entity_ids: list[str] = Field(default_factory=list)
+    confidence: Optional[str] = None  # "low" | "medium" | "high"
+
+
 class FindingStatusUpdate(BaseModel):
     """PATCH body for changing a finding's workflow status."""
 

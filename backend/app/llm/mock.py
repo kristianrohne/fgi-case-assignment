@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from ..models import Finding, Severity
+from ..models import Entity, Finding, ReviewNote, Severity
 from .base import LLMClient
 
 # Category -> recommendation template.
@@ -49,3 +49,20 @@ class MockLLMClient(LLMClient):
             )
             for f in findings
         }
+
+    def review_data(
+        self, *, entities: list[Entity], known_findings: list[Finding]
+    ) -> list[ReviewNote]:
+        # The mock can't reason over the data; return one explanatory note so the
+        # UI shows the feature works, with a clear pointer to the real model.
+        return [
+            ReviewNote(
+                title="AI review runs with a real model",
+                detail=(
+                    "Set LLM_PROVIDER=anthropic to have Claude sweep the register "
+                    "for concerns the deterministic rules did not flag. This mock "
+                    "response is a placeholder."
+                ),
+                confidence="low",
+            )
+        ]

@@ -48,3 +48,12 @@ def test_invalid_status_rejected(client):
 def test_digest_runs_recorded(client):
     client.post("/api/digest", params={"use_llm": False})
     assert len(client.get("/api/digest-runs").json()) >= 1
+
+
+def test_ai_review_returns_notes(client):
+    # On the mock LLM this returns one explanatory placeholder note; the point
+    # is the endpoint works and is shaped right (advisory, separate from findings).
+    notes = client.post("/api/ai-review").json()
+    assert isinstance(notes, list)
+    assert len(notes) >= 1
+    assert "title" in notes[0] and "detail" in notes[0]

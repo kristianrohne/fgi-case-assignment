@@ -22,9 +22,10 @@ from .models import (
     Finding,
     FindingStatusUpdate,
     Letter,
+    ReviewNote,
 )
 from .persistence import get_store, init_db
-from .services.digest import build_digest, compute_findings
+from .services.digest import build_digest, compute_findings, run_ai_review
 
 app = FastAPI(title="FGI Subsidiary Governance API", version="0.1.0")
 init_db()
@@ -135,6 +136,14 @@ def digest(use_llm: bool = True) -> Digest:
 def digest_runs(limit: int = 50) -> list[DigestRun]:
     """History of past digest executions (audit trail / 'what changed')."""
     return get_store().list_runs(limit=limit)
+
+
+@app.post("/api/ai-review", response_model=list[ReviewNote])
+def ai_review() -> list[ReviewNote]:
+    """Advisory AI sweep for concerns the deterministic rules didn't flag.
+
+    Separate from the digest and clearly lower-trust — suggestions, not facts."""
+    return run_ai_review(_data())
 
 
 @app.patch("/api/findings/{finding_id}/status")

@@ -7,10 +7,21 @@ import { EntitiesView } from "./components/EntitiesView";
 import { InboxView } from "./components/InboxView";
 import { LettersView } from "./components/LettersView";
 import { HistoryView } from "./components/HistoryView";
+import { AiReviewView } from "./components/AiReviewView";
 import { Spinner } from "./components/ui";
 import type { Finding } from "./types";
 
-type Tab = "dashboard" | "entities" | "inbox" | "letters" | "history";
+type Tab = "dashboard" | "entities" | "inbox" | "letters" | "history" | "ai-review";
+
+const TABS: Tab[] = ["dashboard", "entities", "inbox", "letters", "history", "ai-review"];
+const TAB_LABELS: Record<Tab, string> = {
+  dashboard: "Dashboard",
+  entities: "Entities",
+  inbox: "Inbox",
+  letters: "Letters",
+  history: "History",
+  "ai-review": "AI review",
+};
 
 export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
@@ -70,17 +81,17 @@ export default function App() {
           </div>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 px-6">
-          {(["dashboard", "entities", "inbox", "letters", "history"] as Tab[]).map((t) => (
+          {TABS.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium capitalize transition ${
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
                 tab === t
                   ? "border-indigo-600 text-indigo-700"
                   : "border-transparent text-slate-500 hover:text-slate-700"
               }`}
             >
-              {t}
+              {TAB_LABELS[t]}
             </button>
           ))}
         </nav>
@@ -109,6 +120,7 @@ export default function App() {
         {tab === "inbox" && <InboxView />}
         {tab === "letters" && <LettersView />}
         {tab === "history" && <HistoryView />}
+        {tab === "ai-review" && <AiReviewView />}
       </main>
     </div>
   );

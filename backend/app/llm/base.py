@@ -12,7 +12,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import date
 
-from ..models import Finding
+from ..models import Entity, Finding, ReviewNote
 
 
 class LLMClient(ABC):
@@ -25,3 +25,10 @@ class LLMClient(ABC):
     @abstractmethod
     def recommend_for_findings(self, findings: list[Finding]) -> dict[str, str]:
         """Map finding.id -> a concrete recommended action for the legal team."""
+
+    @abstractmethod
+    def review_data(
+        self, *, entities: list[Entity], known_findings: list[Finding]
+    ) -> list[ReviewNote]:
+        """Open-ended advisory sweep: look for concerns the deterministic rules
+        did NOT already flag. Advisory only — never the source of truth."""

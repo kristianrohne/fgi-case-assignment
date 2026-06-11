@@ -71,6 +71,13 @@ export interface Finding {
   note: string | null;
 }
 
+export interface ReviewNote {
+  title: string;
+  detail: string;
+  entity_ids: string[];
+  confidence: string | null;
+}
+
 export interface DigestRun {
   id: number;
   created_at: string;

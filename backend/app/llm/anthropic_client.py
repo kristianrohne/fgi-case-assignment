@@ -15,7 +15,7 @@ import json
 from datetime import date
 
 from ..config import settings
-from ..models import Finding
+from ..models import Entity, Finding, ReviewNote
 from .base import LLMClient
 
 _SYSTEM = (
@@ -98,3 +98,57 @@ class AnthropicLLMClient(LLMClient):
             return {str(k): str(v) for k, v in data.items()}
         except (ValueError, json.JSONDecodeError):
             return {}
+
+    def review_data(
+        self, *, entities: list[Entity], known_findings: list[Finding]
+    ) -> list[ReviewNote]:
+        register = [
+            {
+                "id": e.entity_id,
+                "name": e.entity_name,
+                "type": e.entity_type,
+                "jurisdiction": e.jurisdiction,
+                "incorporated": e.incorporation_date_raw,
+                "parent": e.parent_entity_id,
+                "ownership_pct": e.ownership_pct,
+                "status": e.status,
+                "filing_status": e.annual_filing_status,
+                "mandate_expiry": e.board_mandate_expiry_raw,
+                "asset_class": e.asset_class,
+            }
+            for e in entities
+        ]
+        already = sorted({f.title for f in known_findings})
+        prompt = (
+            "Below is the full subsidiary register, and the list of issue types "
+            "ALREADY detected by deterministic rules. Identify up to 6 ADDITIONAL "
+            "concerns that are NOT already covered by those rules — subtle "
+            "inconsistencies, suspicious patterns, or risks a rules engine might "
+            "miss. Be conservative: only flag genuine concerns, and do not repeat "
+            "the known issue types. Return ONLY a JSON array of objects with keys "
+            "title, detail, entity_ids (array of ids), confidence (low|medium|high)."
+            "\n\nALREADY DETECTED:\n" + json.dumps(already)
+            + "\n\nREGISTER:\n" + json.dumps(register)
+        )
+        resp = self._client.messages.create(
+            model=self._model,
+            max_tokens=2000,
+            system=self._system_blocks(),
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = "".join(b.text for b in resp.content if b.type == "text").strip()
+        try:
+            start, end = text.index("["), text.rindex("]") + 1
+            data = json.loads(text[start:end])
+            return [
+                ReviewNote(
+                    title=str(item.get("title", "")),
+                    detail=str(item.get("detail", "")),
+                    entity_ids=[str(x) for x in item.get("entity_ids", [])],
+                    confidence=item.get("confidence"),
+                )
+                for item in data
+                if item.get("title")
+            ]
+        except (ValueError, json.JSONDecodeError):
+            return []

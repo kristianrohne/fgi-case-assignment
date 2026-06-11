@@ -10,6 +10,7 @@ import type {
   FindingStatus,
   Letter,
   Meta,
+  ReviewNote,
 } from "./types";
 
 async function getJSON<T>(url: string): Promise<T> {
@@ -30,6 +31,7 @@ export const api = {
     const qs = new URLSearchParams(params).toString();
     return getJSON<Entity[]>(`/api/entities${qs ? `?${qs}` : ""}`);
   },
+  entity: (id: string) => getJSON<Entity>(`/api/entities/${encodeURIComponent(id)}`),
   findings: () => getJSON<Finding[]>("/api/findings"),
   letters: () => getJSON<Letter[]>("/api/letters"),
   boardUpdates: (unmatchedOnly = false) =>
@@ -39,6 +41,7 @@ export const api = {
   // The headline action: full pipeline + LLM summary & recommendations.
   digest: () => postJSON<Digest>("/api/digest"),
   digestRuns: () => getJSON<DigestRun[]>("/api/digest-runs"),
+  aiReview: () => postJSON<ReviewNote[]>("/api/ai-review"),
   setFindingStatus: async (
     id: string,
     body: { status: FindingStatus; assignee?: string | null; note?: string | null },

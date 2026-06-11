@@ -131,6 +131,7 @@ single `as_of_date` rather than the wall clock — set it to keep a demo stable.
 | `POST` | `/api/digest` | **the headline action**: findings + LLM summary & recommendations |
 | `PATCH` | `/api/findings/{id}/status` | set workflow status (`open`/`acknowledged`/`assigned`/`resolved`) |
 | `GET` | `/api/digest-runs` | history of past digest runs |
+| `POST` | `/api/ai-review` | advisory LLM sweep for concerns the rules didn't flag (kept separate) |
 
 Interactive docs at <http://localhost:8000/docs> when the backend is running.
 
@@ -199,24 +200,59 @@ no network.
 ## Project structure
 
 ```
-backend/app/
-  config.py          single as-of date + paths + thresholds
-  models.py          Entity / BoardUpdate / Letter / LetterClaim / Finding / Digest
-  ingestion/         CSV, JSON inbox, PDF letters, fuzzy matching, claim extraction
-  risk/detectors.py  15 deterministic detectors (the source of truth)
-  llm/               interface + mock (key-free) + Anthropic client
-  persistence/       Store over SQLAlchemy (SQLite default / Postgres)
-  services/digest.py ingest → detect → LLM-enrich pipeline
-  main.py            FastAPI routes
-frontend/src/        React + TS + Tailwind: Dashboard / Entities / Inbox / Letters / History
-docker-compose.yml   optional local Postgres
-data/                provided case data (CSV, JSON, 3 PDFs)
-documents/           case brief & working notes
-notebooks/           exploratory data analysis
+fgi-case-assignment/
+├── README.md                  this file
+├── ARCHITECTURE.md            one-page diagram of the whole system
+├── BACKEND.md                 module-by-module backend walkthrough
+├── AI_LOG.md                  how AI was used (and where I corrected it)
+├── docker-compose.yml         optional local Postgres + Adminer (DB browser)
+├── pytest.ini                 test config
+├── .python-version            pins Python 3.11
+│
+├── backend/
+│   ├── requirements.txt
+│   ├── .env.example           copy to .env to configure (LLM, DB, as-of date)
+│   ├── app/
+│   │   ├── config.py          settings: as-of date, paths, LLM + DB toggles
+│   │   ├── models.py          Pydantic models (Entity, BoardUpdate, Letter,
+│   │   │                       LetterClaim, Finding, Digest, ReviewNote, …)
+│   │   ├── main.py            FastAPI app + all routes
+│   │   ├── ingestion/         messy sources → clean Python objects
+│   │   │   ├── dates.py         tolerant date parsing (one function)
+│   │   │   ├── entities.py      subsidiaries.csv → Entity
+│   │   │   ├── board_updates.py board_updates.json → BoardUpdate + fuzzy matcher
+│   │   │   ├── letters.py       PDF → text (pdfplumber)
+│   │   │   ├── letter_claims.py letter text → LetterClaim + fuzzy matcher
+│   │   │   └── pipeline.py      runs all three → one IngestResult
+│   │   ├── risk/detectors.py  15 deterministic detectors (the source of truth)
+│   │   ├── llm/               the LLM seam
+│   │   │   ├── base.py          interface every client implements
+│   │   │   ├── mock.py          deterministic, no API key
+│   │   │   ├── anthropic_client.py  real Claude
+│   │   │   └── factory.py       picks one from config (falls back to mock)
+│   │   ├── persistence/       Store over SQLAlchemy (SQLite default / Postgres)
+│   │   │   ├── db.py            engine + session
+│   │   │   ├── orm.py           tables: digest_runs, finding_status
+│   │   │   └── store.py         app-facing API (returns Pydantic, not ORM)
+│   │   └── services/digest.py  ingest → detect → LLM-enrich orchestration
+│   └── tests/                 pytest: detectors, ingestion, persistence, API
+│
+├── frontend/                  React 19 + TypeScript + Tailwind v4 (Vite)
+│   ├── vite.config.ts          dev-proxies /api → backend :8000
+│   └── src/
+│       ├── App.tsx             shell, tabs, "Fetch digest" action
+│       ├── api.ts              typed fetch wrapper
+│       ├── types.ts            mirrors the backend models
+│       └── components/         Dashboard · Entities · Inbox · Letters ·
+│                               History · AI review (+ shared ui.tsx)
+│
+├── data/                      provided case data (CSV, JSON, 3 PDF letters)
+├── documents/                 case brief & working notes
+└── notebooks/                 exploratory data analysis (EDA)
 ```
 
-## AI usage
+## Documentation
 
-This project was built with heavy use of AI tooling, as the brief encouraged.
-[`AI_LOG.md`](AI_LOG.md) documents where AI helped, where it got things wrong,
-and where I stepped in.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the system at a glance (diagram + principles)
+- [`BACKEND.md`](BACKEND.md) — closer walkthrough: data flow, fuzzy matching, request lifecycle
+- [`AI_LOG.md`](AI_LOG.md) — where AI helped, where it got things wrong, and where I stepped in

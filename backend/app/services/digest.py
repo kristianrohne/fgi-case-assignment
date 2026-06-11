@@ -17,7 +17,7 @@ from datetime import date, datetime, timezone
 from ..config import settings
 from ..ingestion import IngestResult, ingest
 from ..llm import get_llm_client
-from ..models import Digest, Finding
+from ..models import Digest, Finding, ReviewNote
 from ..persistence import get_store
 from ..risk import detect_findings
 
@@ -82,3 +82,13 @@ def build_digest(result: IngestResult | None = None, *, use_llm: bool = True) ->
         counts=counts,
         findings=findings,
     )
+
+
+def run_ai_review(result: IngestResult | None = None) -> list[ReviewNote]:
+    """Advisory LLM sweep for concerns the deterministic rules didn't flag.
+
+    Kept entirely separate from the digest: the findings remain the source of
+    truth; this is a second, lower-trust opinion."""
+    result = result or ingest()
+    known = compute_findings(result, settings.today)
+    return get_llm_client().review_data(entities=result.entities, known_findings=known)

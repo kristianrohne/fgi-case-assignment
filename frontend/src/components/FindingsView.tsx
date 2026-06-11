@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { api } from "../api";
-import type { Finding, FindingStatus, Severity } from "../types";
+import type { Entity, Finding, FindingStatus, Severity } from "../types";
 import { Card, SeverityBadge, StatusBadge } from "./ui";
 
 const SEVERITIES: Severity[] = ["Critical", "Warning", "Info"];
@@ -75,6 +75,21 @@ export function FindingsView({
   );
 }
 
+// Field order for the entity drill-down (the data behind a finding).
+const ENTITY_FIELDS: [keyof Entity, string][] = [
+  ["entity_name", "Name"],
+  ["jurisdiction", "Jurisdiction"],
+  ["status", "Status"],
+  ["incorporation_date_raw", "Incorporated"],
+  ["parent_entity_id", "Parent"],
+  ["ownership_pct", "Ownership %"],
+  ["board_mandate_expiry", "Mandate expiry"],
+  ["annual_filing_due", "Filing due"],
+  ["annual_filing_status", "Filing status"],
+  ["registered_agent", "Agent"],
+  ["asset_description", "Asset"],
+];
+
 function FindingCard({
   finding: f,
   onStatusChange,
@@ -83,6 +98,19 @@ function FindingCard({
   onStatusChange: (id: string, patch: Partial<Finding>) => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [entities, setEntities] = useState<Entity[] | null>(null);
+
+  async function toggleEvidence() {
+    const next = !open;
+    setOpen(next);
+    if (next && entities === null && f.entity_ids.length > 0) {
+      const fetched = await Promise.all(
+        f.entity_ids.map((id) => api.entity(id).catch(() => null)),
+      );
+      setEntities(fetched.filter((e): e is Entity => e !== null));
+    }
+  }
 
   async function changeStatus(next: FindingStatus) {
     setSaving(true);
@@ -132,11 +160,17 @@ function FindingCard({
             {f.assignee && (
               <span className="text-xs text-slate-500">→ {f.assignee}</span>
             )}
+            <button
+              onClick={toggleEvidence}
+              className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-700"
+            >
+              {open ? "Hide data" : "Show data ▾"}
+            </button>
             <select
               value={f.status}
               disabled={saving}
               onChange={(e) => changeStatus(e.target.value as FindingStatus)}
-              className="ml-auto rounded-md border border-slate-300 bg-white px-2 py-1 text-xs capitalize text-slate-600 disabled:opacity-50"
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs capitalize text-slate-600 disabled:opacity-50"
             >
               {STATUSES.map((s) => (
                 <option key={s} value={s} className="capitalize">
@@ -145,10 +179,41 @@ function FindingCard({
               ))}
             </select>
           </div>
+
+          {open && (
+            <div className="mt-3 space-y-3 rounded-lg bg-slate-50 p-3 text-xs">
+              {entities?.map((e) => (
+                <div key={e.entity_id}>
+                  <div className="mb-1 font-mono font-semibold text-slate-600">{e.entity_id}</div>
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                    {ENTITY_FIELDS.map(([k, label]) => (
+                      <div key={k} className="contents">
+                        <dt className="text-slate-400">{label}</dt>
+                        <dd className="text-slate-700">{formatValue(e[k])}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ))}
+              {Object.keys(f.evidence).length > 0 && (
+                <div>
+                  <div className="mb-1 font-semibold text-slate-500">Evidence</div>
+                  <pre className="overflow-x-auto whitespace-pre-wrap text-slate-600">
+                    {JSON.stringify(f.evidence, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </Card>
   );
+}
+
+function formatValue(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  return String(v);
 }
 
 function Segmented({
