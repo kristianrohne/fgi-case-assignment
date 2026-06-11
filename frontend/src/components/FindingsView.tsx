@@ -14,53 +14,79 @@ export function FindingsView({
   onStatusChange: (id: string, patch: Partial<Finding>) => void;
 }) {
   const [severity, setSeverity] = useState<Severity | "All">("All");
-  const [category, setCategory] = useState<string>("All");
   const [status, setStatus] = useState<FindingStatus | "All" | "unresolved">("unresolved");
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
 
-  const categories = useMemo(
-    () => ["All", ...Array.from(new Set(findings.map((f) => f.category))).sort()],
-    [findings],
-  );
+  // Findings per category, for the toggle chips.
+  const categoryCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const f of findings) m.set(f.category, (m.get(f.category) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [findings]);
+
+  function toggleCategory(c: string) {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  }
 
   const filtered = findings.filter(
     (f) =>
       (severity === "All" || f.severity === severity) &&
-      (category === "All" || f.category === category) &&
+      !hidden.has(f.category) &&
       (status === "All" ||
         (status === "unresolved" ? f.status !== "resolved" : f.status === status)),
   );
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Segmented
-          value={severity}
-          options={["All", ...SEVERITIES]}
-          onChange={(v) => setSeverity(v as Severity | "All")}
-        />
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
-        >
-          {categories.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as FindingStatus | "All" | "unresolved")}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
-        >
-          <option value="unresolved">Unresolved</option>
-          <option value="All">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s} className="capitalize">
-              {s}
-            </option>
-          ))}
-        </select>
-        <span className="ml-auto text-sm text-slate-500">{filtered.length} shown</span>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented
+            value={severity}
+            options={["All", ...SEVERITIES]}
+            onChange={(v) => setSeverity(v as Severity | "All")}
+          />
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as FindingStatus | "All" | "unresolved")}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
+          >
+            <option value="unresolved">Unresolved</option>
+            <option value="All">All statuses</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s} className="capitalize">
+                {s}
+              </option>
+            ))}
+          </select>
+          <span className="ml-auto text-sm text-slate-500">{filtered.length} shown</span>
+        </div>
+
+        {/* Clickable theme toggles — click a box to hide/show that category. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-slate-400">Themes:</span>
+          {categoryCounts.map(([c, n]) => {
+            const off = hidden.has(c);
+            return (
+              <button
+                key={c}
+                onClick={() => toggleCategory(c)}
+                title={off ? "Hidden — click to show" : "Visible — click to hide"}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  off
+                    ? "border-slate-200 bg-white text-slate-400 line-through"
+                    : "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                }`}
+              >
+                {c} <span className="opacity-60">{n}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="space-y-3">
