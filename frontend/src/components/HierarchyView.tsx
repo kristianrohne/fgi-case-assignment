@@ -29,66 +29,52 @@ const sw = (ac: string | null | undefined): Swatch => (ac && PALETTE[ac]) ?? DEF
 interface TNode {
   e: Entity;
   children: TNode[];
-  suspected: TNode[];   // orphan children fuzzy-matched here
-  isOrphan?: boolean;
+  isOrphan?: boolean;      // parent_entity_id declared but not found in register
   brokenParentRef?: string;
-}
-
-// ── Fuzzy parent lookup (longest-prefix match) ────────────────────────────
-function findLikelyParent(brokenId: string, byId: Map<string, Entity>): Entity | null {
-  let best: Entity | null = null;
-  let bestLen = 0;
-  for (const [id, entity] of byId) {
-    if (brokenId.startsWith(id) && id.length > bestLen) {
-      best = entity; bestLen = id.length;
-    }
-  }
-  return best;
 }
 
 // ── Forest builder ─────────────────────────────────────────────────────────
 function buildForest(entities: Entity[]): TNode[] {
-  const byId       = new Map(entities.map(e => [e.entity_id, e]));
-  const childMap   = new Map<string, string[]>();
-  const suspMap    = new Map<string, string[]>();
-  const brokenRefs = new Map<string, string>();
-  const isChild    = new Set<string>();
+  const byId     = new Map(entities.map(e => [e.entity_id, e]));
+  const childMap = new Map<string, string[]>();
+  const isChild  = new Set<string>();
 
   for (const e of entities) {
     const pid = e.parent_entity_id;
     if (!pid) continue;
     if (byId.has(pid)) {
+      // Confirmed parent — add to child map
       if (!childMap.has(pid)) childMap.set(pid, []);
       childMap.get(pid)!.push(e.entity_id);
       isChild.add(e.entity_id);
-    } else {
-      const likely = findLikelyParent(pid, byId);
-      if (likely) {
-        if (!suspMap.has(likely.entity_id)) suspMap.set(likely.entity_id, []);
-        suspMap.get(likely.entity_id)!.push(e.entity_id);
-        brokenRefs.set(e.entity_id, pid);
-        isChild.add(e.entity_id);
-      }
     }
+    // Broken reference → entity is NOT added to isChild,
+    // so it becomes its own root node and gets the orphan marker below.
   }
 
   function build(id: string, seen: Set<string>): TNode | null {
-    if (seen.has(id)) return null;
+    if (seen.has(id)) return null; // cycle guard
     const e = byId.get(id);
     if (!e) return null;
     const next = new Set(seen); next.add(id);
-    const children  = (childMap.get(id) ?? []).map(c => build(c, next)).filter((n): n is TNode => n !== null);
-    const suspected = (suspMap.get(id) ?? []).map(c => {
-      const node = build(c, next);
-      if (node) { node.isOrphan = true; node.brokenParentRef = brokenRefs.get(c); }
-      return node;
-    }).filter((n): n is TNode => n !== null);
-    return { e, children, suspected };
+    const children = (childMap.get(id) ?? [])
+      .map(c => build(c, next))
+      .filter((n): n is TNode => n !== null);
+    return { e, children };
   }
 
   return entities
     .filter(e => !isChild.has(e.entity_id))
-    .map(e => build(e.entity_id, new Set()))
+    .map(e => {
+      const node = build(e.entity_id, new Set());
+      if (!node) return null;
+      // Mark orphans: has a declared parent that doesn't exist in register
+      if (e.parent_entity_id && !byId.has(e.parent_entity_id)) {
+        node.isOrphan = true;
+        node.brokenParentRef = e.parent_entity_id;
+      }
+      return node;
+    })
     .filter((n): n is TNode => n !== null);
 }
 
@@ -107,11 +93,11 @@ function nodeMatches(n: TNode, q: string): boolean {
 function subtreeMatches(n: TNode, q: string): boolean {
   if (!q) return true;
   if (nodeMatches(n, q)) return true;
-  return [...n.children, ...n.suspected].some(c => subtreeMatches(c, q));
+  return n.children.some(c => subtreeMatches(c, q));
 }
 
 function countAll(n: TNode): number {
-  return 1 + [...n.children, ...n.suspected].reduce((s, c) => s + countAll(c), 0);
+  return 1 + n.children.reduce((s, c) => s + countAll(c), 0);
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -140,9 +126,8 @@ export function HierarchyView() {
     if (inited || forest.length === 0) return;
     const ids = new Set<string>();
     function walk(n: TNode, depth: number) {
-      const all = [...n.children, ...n.suspected];
-      if (depth >= 1 && all.length > 0) { ids.add(n.e.entity_id); return; }
-      for (const c of all) walk(c, depth + 1);
+      if (depth >= 1 && n.children.length > 0) { ids.add(n.e.entity_id); return; }
+      for (const c of n.children) walk(c, depth + 1);
     }
     for (const root of forest) walk(root, 0);
     setCollapsed(ids);
@@ -278,13 +263,12 @@ function TreeNode({
   selectedId: string | null;
   q: string;
 }) {
-  const all      = [...n.children, ...n.suspected];
-  const hasKids  = all.length > 0;
+  const hasKids  = n.children.length > 0;
   const isCol    = collapsed.has(n.e.entity_id);
   const swatch   = sw(n.e.asset_class);
   const matches  = q ? nodeMatches(n, q) : false;
   const isActive = selectedId === n.e.entity_id;
-  const visible  = all.filter(c => !q || subtreeMatches(c, q));
+  const visible  = n.children.filter(c => !q || subtreeMatches(c, q));
 
   return (
     <div>
@@ -443,9 +427,8 @@ function EntityPanel({
           <div className="font-semibold mb-0.5">⚠ Broken parent reference</div>
           <p>
             Declared parent <span className="font-mono font-semibold">{brokenRef}</span> does not
-            exist in the register. This entity is shown here based on an ID prefix match only —
-            the connection is <span className="font-semibold">unverified</span> and may be wrong.
-            Verify against source documents before relying on this placement.
+            exist in the register. This entity is shown as an independent tree rather than
+            placed under a guessed parent. Verify the correct parent against source documents.
           </p>
         </div>
       )}
