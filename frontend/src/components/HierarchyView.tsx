@@ -121,6 +121,7 @@ export function HierarchyView() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [inited, setInited]     = useState(false);
   const [search, setSearch]     = useState("");
+  const [selected, setSelected] = useState<{ e: Entity; isOrphan?: boolean; brokenRef?: string } | null>(null);
 
   useEffect(() => {
     api.entities().then(list => { setEntities(list); setLoading(false); });
@@ -222,27 +223,43 @@ export function HierarchyView() {
         </div>
       </div>
 
-      {/* Tree */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="divide-y divide-slate-50">
-          {forest.map(root =>
-            subtreeMatches(root, q) ? (
-              <TreeNode
-                key={root.e.entity_id}
-                node={root}
-                depth={0}
-                collapsed={collapsed}
-                onToggle={toggle}
-                q={q}
-                isLast={false}
-              />
-            ) : null
+      {/* Tree + detail panel side by side */}
+      <div className="flex items-start gap-4">
+
+        {/* Tree list */}
+        <div className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="divide-y divide-slate-50">
+            {forest.map(root =>
+              subtreeMatches(root, q) ? (
+                <TreeNode
+                  key={root.e.entity_id}
+                  node={root}
+                  depth={0}
+                  collapsed={collapsed}
+                  onToggle={toggle}
+                  onSelect={sel => setSelected(sel)}
+                  selectedId={selected?.e.entity_id ?? null}
+                  q={q}
+                />
+              ) : null
+            )}
+          </div>
+          {q && forest.every(r => !subtreeMatches(r, q)) && (
+            <p className="px-6 py-8 text-center text-sm text-slate-400">
+              No entities match <span className="font-medium text-slate-600">"{search}"</span>
+            </p>
           )}
         </div>
-        {q && forest.every(r => !subtreeMatches(r, q)) && (
-          <p className="px-6 py-8 text-center text-sm text-slate-400">
-            No entities match <span className="font-medium text-slate-600">"{search}"</span>
-          </p>
+
+        {/* Detail panel — appears when a row is clicked */}
+        {selected && (
+          <EntityPanel
+            entity={selected.e}
+            isOrphan={selected.isOrphan}
+            brokenRef={selected.brokenRef}
+            allEntities={entities}
+            onClose={() => setSelected(null)}
+          />
         )}
       </div>
     </div>
@@ -251,36 +268,41 @@ export function HierarchyView() {
 
 // ── Tree row ───────────────────────────────────────────────────────────────
 function TreeNode({
-  node: n, depth, collapsed, onToggle, q, isLast,
+  node: n, depth, collapsed, onToggle, onSelect, selectedId, q,
 }: {
   node: TNode;
   depth: number;
   collapsed: Set<string>;
   onToggle: (id: string) => void;
+  onSelect: (sel: { e: Entity; isOrphan?: boolean; brokenRef?: string }) => void;
+  selectedId: string | null;
   q: string;
-  isLast: boolean;
 }) {
   const all      = [...n.children, ...n.suspected];
   const hasKids  = all.length > 0;
   const isCol    = collapsed.has(n.e.entity_id);
   const swatch   = sw(n.e.asset_class);
   const matches  = q ? nodeMatches(n, q) : false;
+  const isActive = selectedId === n.e.entity_id;
   const visible  = all.filter(c => !q || subtreeMatches(c, q));
 
   return (
     <div>
-      {/* Row */}
+      {/* Row — click anywhere (except chevron) to open detail panel */}
       <div
-        className={`group flex items-center gap-2 px-3 py-2 transition-colors ${
-          matches ? "bg-indigo-50" : "hover:bg-slate-50"
-        } ${n.isOrphan ? "border-l-2 border-amber-300" : depth === 0 ? "border-l-2 border-transparent" : "border-l-2 border-transparent"}`}
+        onClick={() => onSelect({ e: n.e, isOrphan: n.isOrphan, brokenRef: n.brokenParentRef })}
+        className={`group flex cursor-pointer items-center gap-2 py-2 pr-3 transition-colors
+          ${isActive  ? "bg-indigo-100 ring-1 ring-inset ring-indigo-200" :
+            matches   ? "bg-indigo-50 hover:bg-indigo-100" :
+                        "hover:bg-slate-50"}
+          ${n.isOrphan ? "border-l-2 border-amber-300" : "border-l-2 border-transparent"}`}
         style={{ paddingLeft: `${12 + depth * 28}px` }}
       >
-        {/* Expand/collapse chevron or leaf dot */}
+        {/* Expand/collapse chevron — stopPropagation so it doesn't select */}
         <span className="w-5 shrink-0 flex items-center justify-center">
           {hasKids ? (
             <button
-              onClick={() => onToggle(n.e.entity_id)}
+              onClick={ev => { ev.stopPropagation(); onToggle(n.e.entity_id); }}
               className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition"
             >
               <svg className={`h-3 w-3 transition-transform ${!isCol ? "rotate-90" : ""}`}
@@ -297,7 +319,7 @@ function TreeNode({
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: swatch.dot }} />
 
         {/* Name */}
-        <span className={`font-medium text-sm ${matches ? "text-indigo-900" : "text-slate-800"}`}>
+        <span className={`font-medium text-sm ${isActive ? "text-indigo-900" : matches ? "text-indigo-800" : "text-slate-800"}`}>
           {highlight(n.e.entity_name ?? "—", q)}
         </span>
 
@@ -306,17 +328,13 @@ function TreeNode({
           {highlight(n.e.entity_id, q)}
         </span>
 
-        {/* Orphan warning */}
+        {/* Orphan warning badge */}
         {n.isOrphan && (
-          <span
-            title={`Parent ref "${n.brokenParentRef}" not found in register — connected here by ID similarity. Verify manually.`}
-            className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 cursor-help"
-          >
+          <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
             ⚠ {n.brokenParentRef}
           </span>
         )}
 
-        {/* Spacer */}
         <span className="flex-1" />
 
         {/* Jurisdiction */}
@@ -339,38 +357,203 @@ function TreeNode({
           </span>
         )}
 
-        {/* Status pill */}
         <StatusDot status={n.e.status} />
 
-        {/* Collapsed child count */}
         {isCol && hasKids && (
-          <span className="text-xs text-slate-400">
-            +{countAll(n) - 1}
-          </span>
+          <span className="text-xs text-slate-400">+{countAll(n) - 1}</span>
         )}
       </div>
 
       {/* Children */}
       {!isCol && visible.length > 0 && (
         <div className="relative">
-          {/* Vertical guide line */}
-          <div
-            className="absolute top-0 bottom-0 w-px bg-slate-100"
-            style={{ left: `${12 + depth * 28 + 14}px` }}
-          />
-          {visible.map((child, idx) =>
+          <div className="absolute top-0 bottom-0 w-px bg-slate-100"
+            style={{ left: `${12 + depth * 28 + 14}px` }} />
+          {visible.map(child => (
             <TreeNode
               key={child.e.entity_id}
               node={child}
               depth={depth + 1}
               collapsed={collapsed}
               onToggle={onToggle}
+              onSelect={onSelect}
+              selectedId={selectedId}
               q={q}
-              isLast={idx === visible.length - 1}
             />
-          )}
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Entity detail panel ────────────────────────────────────────────────────
+function EntityPanel({
+  entity: e, isOrphan, brokenRef, allEntities, onClose,
+}: {
+  entity: Entity;
+  isOrphan?: boolean;
+  brokenRef?: string;
+  allEntities: Entity[];
+  onClose: () => void;
+}) {
+  const s = sw(e.asset_class);
+
+  // Resolve parent entity name for display
+  const parentEntity = e.parent_entity_id
+    ? allEntities.find(x => x.entity_id === e.parent_entity_id) ?? null
+    : null;
+
+  // Direct children in the register
+  const children = allEntities.filter(x => x.parent_entity_id === e.entity_id);
+
+  return (
+    <div className="w-80 shrink-0 sticky top-4 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden text-sm">
+
+      {/* Header — coloured by asset class */}
+      <div className="px-4 py-3 flex items-start justify-between gap-2"
+        style={{ background: s.bg, borderBottom: `2px solid ${s.dot}` }}>
+        <div className="min-w-0">
+          <div className="font-bold text-base leading-snug" style={{ color: s.text }}>
+            {e.entity_name ?? "—"}
+          </div>
+          <div className="font-mono text-xs mt-0.5 opacity-70" style={{ color: s.text }}>
+            {e.entity_id}
+          </div>
+          {e.jurisdiction && (
+            <div className="text-xs mt-0.5 opacity-60" style={{ color: s.text }}>
+              {e.jurisdiction}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-black/10 hover:text-slate-700 transition"
+          title="Close"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 16 16" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4l8 8M12 4l-8 8" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Orphan warning — honest about the heuristic */}
+      {isOrphan && brokenRef && (
+        <div className="border-b border-amber-100 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+          <div className="font-semibold mb-0.5">⚠ Broken parent reference</div>
+          <p>
+            Declared parent <span className="font-mono font-semibold">{brokenRef}</span> does not
+            exist in the register. This entity is shown here based on an ID prefix match only —
+            the connection is <span className="font-semibold">unverified</span> and may be wrong.
+            Verify against source documents before relying on this placement.
+          </p>
+        </div>
+      )}
+
+      <div className="overflow-y-auto max-h-[70vh] country-scroll">
+
+        {/* ── Structure ── */}
+        <Section title="Structure">
+          <Row label="Entity type"  value={e.entity_type} />
+          <Row label="Status">
+            <StatusDot status={e.status} />
+            <span className="ml-1.5">{e.status ?? "—"}</span>
+          </Row>
+          <Row label="Asset class"  value={e.asset_class} />
+          <Row label="Asset"        value={e.asset_description} />
+          <Row label="Parent">
+            {e.parent_entity_id ? (
+              <span className="font-mono text-indigo-700">
+                {e.parent_entity_id}
+                {parentEntity && (
+                  <span className="ml-1 font-sans text-slate-400 text-[10px] not-italic">
+                    ({parentEntity.entity_name})
+                  </span>
+                )}
+                {!parentEntity && (
+                  <span className="ml-1 text-amber-600 text-[10px]">(not in register)</span>
+                )}
+              </span>
+            ) : (
+              <span className="text-slate-400">— root entity</span>
+            )}
+          </Row>
+          <Row label="Ownership"    value={e.ownership_pct != null ? `${e.ownership_pct}%` : null} />
+        </Section>
+
+        {/* ── Governance ── */}
+        <Section title="Governance">
+          <Row label="Mandate expiry" value={e.board_mandate_expiry} />
+          <Row label="Board members">
+            {e.board_members.length > 0 ? (
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {e.board_members.map(m => (
+                  <span key={m}
+                    className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-xs text-slate-700">
+                    {m}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="text-slate-400">—</span>
+            )}
+          </Row>
+        </Section>
+
+        {/* ── Filing ── */}
+        <Section title="Filing">
+          <Row label="Filing status" value={e.annual_filing_status} />
+          <Row label="Filing due"    value={e.annual_filing_due} />
+          <Row label="Registered agent" value={e.registered_agent} />
+        </Section>
+
+        {/* ── Registration ── */}
+        <Section title="Registration">
+          <Row label="Incorporated"  value={e.incorporation_date ?? e.incorporation_date_raw} />
+          <Row label="Address"       value={e.registered_address} />
+        </Section>
+
+        {/* ── Direct children ── */}
+        {children.length > 0 && (
+          <Section title={`Direct subsidiaries (${children.length})`}>
+            <div className="flex flex-col gap-1">
+              {children.map(c => (
+                <div key={c.entity_id}
+                  className="flex items-center gap-2 rounded-lg bg-slate-50 px-2 py-1.5">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: sw(c.asset_class).dot }} />
+                  <span className="font-medium text-slate-800 text-xs truncate">{c.entity_name ?? c.entity_id}</span>
+                  <span className="ml-auto font-mono text-[10px] text-slate-400 shrink-0">{c.entity_id}</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="border-b border-slate-100 px-4 py-3 last:border-b-0">
+      <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">{title}</div>
+      <div className="space-y-1.5">{children}</div>
+    </div>
+  );
+}
+
+function Row({
+  label, value, children,
+}: {
+  label: string;
+  value?: string | null;
+  children?: React.ReactNode;
+}) {
+  const content = children ?? (value ? <span className="text-slate-700">{value}</span> : <span className="text-slate-300">—</span>);
+  return (
+    <div className="flex items-start gap-2">
+      <span className="w-28 shrink-0 text-xs text-slate-400">{label}</span>
+      <div className="flex-1 text-xs">{content}</div>
     </div>
   );
 }
