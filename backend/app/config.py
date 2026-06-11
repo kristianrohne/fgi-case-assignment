@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     # Time
     as_of_date: Optional[date] = None
 
+    # Persistence. SQLite by default (zero setup); set DATABASE_URL to a
+    # postgresql+psycopg://... URL to run on Postgres instead. The same
+    # SQLAlchemy data layer serves both — switching engines is one env var.
+    database_url: str = f"sqlite:///{ROOT_DIR / 'backend' / 'fgi.db'}"
+
     # Data paths
     subsidiaries_csv: Path = DATA_DIR / "subsidiaries.csv"
     board_updates_json: Path = DATA_DIR / "board_updates.json"

@@ -55,6 +55,8 @@ export interface Letter {
   claims: LetterClaim[];
 }
 
+export type FindingStatus = "open" | "acknowledged" | "assigned" | "resolved";
+
 export interface Finding {
   id: string;
   category: string;
@@ -64,6 +66,20 @@ export interface Finding {
   entity_ids: string[];
   evidence: Record<string, unknown>;
   recommendation: string | null;
+  status: FindingStatus;
+  assignee: string | null;
+  note: string | null;
+}
+
+export interface DigestRun {
+  id: number;
+  created_at: string;
+  as_of: string;
+  total: number;
+  critical: number;
+  warning: number;
+  info: number;
+  summary: string | null;
 }
 
 export interface DigestCounts {

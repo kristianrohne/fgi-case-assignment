@@ -6,9 +6,11 @@ import { FindingsView } from "./components/FindingsView";
 import { EntitiesView } from "./components/EntitiesView";
 import { InboxView } from "./components/InboxView";
 import { LettersView } from "./components/LettersView";
+import { HistoryView } from "./components/HistoryView";
 import { Spinner } from "./components/ui";
+import type { Finding } from "./types";
 
-type Tab = "dashboard" | "entities" | "inbox" | "letters";
+type Tab = "dashboard" | "entities" | "inbox" | "letters" | "history";
 
 export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
@@ -31,6 +33,14 @@ export default function App() {
     } finally {
       setLoadingDigest(false);
     }
+  }
+
+  function updateFindingStatus(id: string, patch: Partial<Finding>) {
+    setDigest((prev) =>
+      prev
+        ? { ...prev, findings: prev.findings.map((f) => (f.id === id ? { ...f, ...patch } : f)) }
+        : prev,
+    );
   }
 
   return (
@@ -60,7 +70,7 @@ export default function App() {
           </div>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 px-6">
-          {(["dashboard", "entities", "inbox", "letters"] as Tab[]).map((t) => (
+          {(["dashboard", "entities", "inbox", "letters", "history"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -89,7 +99,7 @@ export default function App() {
           ) : digest ? (
             <div className="space-y-6">
               <SummaryBar digest={digest} />
-              <FindingsView findings={digest.findings} />
+              <FindingsView findings={digest.findings} onStatusChange={updateFindingStatus} />
             </div>
           ) : (
             <EmptyState onFetch={fetchDigest} />
@@ -98,6 +108,7 @@ export default function App() {
         {tab === "entities" && <EntitiesView />}
         {tab === "inbox" && <InboxView />}
         {tab === "letters" && <LettersView />}
+        {tab === "history" && <HistoryView />}
       </main>
     </div>
   );

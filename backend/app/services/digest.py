@@ -18,11 +18,28 @@ from ..config import settings
 from ..ingestion import IngestResult, ingest
 from ..llm import get_llm_client
 from ..models import Digest, Finding
+from ..persistence import get_store
 from ..risk import detect_findings
 
 
 def compute_findings(result: IngestResult, today: date) -> list[Finding]:
-    return detect_findings(result, today=today)
+    findings = detect_findings(result, today=today)
+    apply_statuses(findings)
+    return findings
+
+
+def apply_statuses(findings: list[Finding]) -> None:
+    """Merge persisted workflow state onto freshly-computed findings (in place).
+
+    Findings have stable ids, so a status set on a previous run re-attaches to
+    the same finding here."""
+    statuses = get_store().all_statuses()
+    for f in findings:
+        row = statuses.get(f.id)
+        if row is not None:
+            f.status = row.status
+            f.assignee = row.assignee
+            f.note = row.note
 
 
 def _counts(findings: list[Finding]) -> dict:

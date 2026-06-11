@@ -14,10 +14,20 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .ingestion import IngestResult, ingest
-from .models import BoardUpdate, Digest, Entity, Finding, Letter
+from .models import (
+    BoardUpdate,
+    Digest,
+    DigestRun,
+    Entity,
+    Finding,
+    FindingStatusUpdate,
+    Letter,
+)
+from .persistence import get_store, init_db
 from .services.digest import build_digest, compute_findings
 
 app = FastAPI(title="FGI Subsidiary Governance API", version="0.1.0")
+init_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -113,5 +123,32 @@ def list_findings(severity: str | None = None, category: str | None = None) -> l
 
 @app.post("/api/digest", response_model=Digest)
 def digest(use_llm: bool = True) -> Digest:
-    """The headline action: full pipeline + LLM summary and recommendations."""
-    return build_digest(_data(), use_llm=use_llm)
+    """The headline action: full pipeline + LLM summary and recommendations.
+
+    Each run is recorded for the history view."""
+    result = build_digest(_data(), use_llm=use_llm)
+    get_store().record_digest(result)
+    return result
+
+
+@app.get("/api/digest-runs", response_model=list[DigestRun])
+def digest_runs(limit: int = 50) -> list[DigestRun]:
+    """History of past digest executions (audit trail / 'what changed')."""
+    return get_store().list_runs(limit=limit)
+
+
+@app.patch("/api/findings/{finding_id}/status")
+def set_finding_status(finding_id: str, update: FindingStatusUpdate) -> dict:
+    """Set a finding's workflow status (open / acknowledged / assigned / resolved)."""
+    try:
+        row = get_store().set_status(
+            finding_id, update.status, update.assignee, update.note
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {
+        "finding_id": row.finding_id,
+        "status": row.status,
+        "assignee": row.assignee,
+        "note": row.note,
+    }

@@ -1,7 +1,16 @@
 // Thin fetch wrapper. URLs are relative — the Vite dev proxy (and any prod
 // reverse proxy) forwards /api to the FastAPI backend.
 
-import type { BoardUpdate, Digest, Entity, Finding, Letter, Meta } from "./types";
+import type {
+  BoardUpdate,
+  Digest,
+  DigestRun,
+  Entity,
+  Finding,
+  FindingStatus,
+  Letter,
+  Meta,
+} from "./types";
 
 async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -29,4 +38,17 @@ export const api = {
     ),
   // The headline action: full pipeline + LLM summary & recommendations.
   digest: () => postJSON<Digest>("/api/digest"),
+  digestRuns: () => getJSON<DigestRun[]>("/api/digest-runs"),
+  setFindingStatus: async (
+    id: string,
+    body: { status: FindingStatus; assignee?: string | null; note?: string | null },
+  ) => {
+    const res = await fetch(`/api/findings/${encodeURIComponent(id)}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
+  },
 };

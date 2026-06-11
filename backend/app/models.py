@@ -112,6 +112,16 @@ class Finding(BaseModel):
     evidence: dict = Field(default_factory=dict)
     recommendation: Optional[str] = None
 
+    # Workflow state, merged in from the persistence layer (not the detectors).
+    # Findings have stable, deterministic ids, so status survives across digest
+    # runs and re-attaches to the same finding next time.
+    status: str = "open"  # open | acknowledged | assigned | resolved
+    assignee: Optional[str] = None
+    note: Optional[str] = None
+
+
+VALID_STATUSES = {"open", "acknowledged", "assigned", "resolved"}
+
 
 class Digest(BaseModel):
     """The full result of a 'digest fetch'."""
@@ -121,3 +131,24 @@ class Digest(BaseModel):
     summary: Optional[str] = None  # LLM narrative; None when not yet generated
     counts: dict = Field(default_factory=dict)
     findings: list[Finding] = Field(default_factory=list)
+
+
+class FindingStatusUpdate(BaseModel):
+    """PATCH body for changing a finding's workflow status."""
+
+    status: str
+    assignee: Optional[str] = None
+    note: Optional[str] = None
+
+
+class DigestRun(BaseModel):
+    """One historical digest execution (for the History view)."""
+
+    id: int
+    created_at: str
+    as_of: date
+    total: int
+    critical: int
+    warning: int
+    info: int
+    summary: Optional[str] = None

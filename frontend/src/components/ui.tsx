@@ -35,6 +35,22 @@ export function StatusPill({ status }: { status: string | null }) {
   );
 }
 
+const STATUS_STYLES_MAP: Record<string, string> = {
+  open: "bg-slate-100 text-slate-600",
+  acknowledged: "bg-blue-100 text-blue-700",
+  assigned: "bg-violet-100 text-violet-700",
+  resolved: "bg-emerald-100 text-emerald-700",
+};
+
+export function StatusBadge({ status }: { status: string }) {
+  const cls = STATUS_STYLES_MAP[status] ?? "bg-slate-100 text-slate-600";
+  return (
+    <span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium capitalize ${cls}`}>
+      {status}
+    </span>
+  );
+}
+
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div className={`rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>

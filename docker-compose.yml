@@ -1,0 +1,21 @@
+# Optional Postgres for the persistence layer. The app runs on SQLite without
+# this; bring it up only to run on Postgres:
+#
+#   docker compose up -d
+#   echo 'DATABASE_URL=postgresql+psycopg://fgi:fgi@localhost:5433/fgi' >> backend/.env
+#   # restart the backend
+#
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: fgi
+      POSTGRES_PASSWORD: fgi
+      POSTGRES_DB: fgi
+    ports:
+      - "5433:5432"  # 5433 on the host to avoid clashing with a local Postgres
+    volumes:
+      - fgi_pgdata:/var/lib/postgresql/data
+
+volumes:
+  fgi_pgdata:

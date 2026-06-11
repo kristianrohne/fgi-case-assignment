@@ -29,6 +29,8 @@ React dashboard                ──►  severity-ranked findings, filters, ent
                                     browser, inbox & letter reconciliation
 ```
 
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full diagram.
+
 The headline design choice: **the detectors produce the facts; the LLM only
 explains and recommends.** Every risk is reproducible from the data with no
 model in the loop, which makes the tool trustworthy and makes "what the AI did
@@ -88,6 +90,7 @@ Claude. `.env` is gitignored — the key never enters the repo.
 | `ANTHROPIC_API_KEY` | — | required only when `LLM_PROVIDER=anthropic` |
 | `ANTHROPIC_MODEL` | `claude-haiku-4-5-20251001` | model for the digest |
 | `AS_OF_DATE` | today | pins the "current date" for all deadline maths (e.g. `2026-06-11`) so a demo stays reproducible |
+| `DATABASE_URL` | local SQLite | set to `postgresql+psycopg://...` to run on Postgres instead (see below) |
 
 All time-based risks (overdue filings, expiring mandates) are computed against a
 single `as_of_date` rather than the wall clock — set it to keep a demo stable.
@@ -126,17 +129,45 @@ single `as_of_date` rather than the wall clock — set it to keep a demo stable.
 | `GET` | `/api/letters` | letters with extracted, register-matched claims |
 | `GET` | `/api/findings` | deterministic findings only (instant, no LLM) |
 | `POST` | `/api/digest` | **the headline action**: findings + LLM summary & recommendations |
+| `PATCH` | `/api/findings/{id}/status` | set workflow status (`open`/`acknowledged`/`assigned`/`resolved`) |
+| `GET` | `/api/digest-runs` | history of past digest runs |
 
 Interactive docs at <http://localhost:8000/docs> when the backend is running.
 
 ---
 
+## Persistence & workflow
+
+The *input* data (register, inbox, letters) is read-only and small, so it lives
+in memory. What needs to be **durable** is the part that makes this an ongoing
+tool rather than a one-shot report:
+
+- **Finding workflow** — mark a finding `acknowledged` / `assigned` / `resolved`.
+  Findings have stable, deterministic ids, so a status set today re-attaches to
+  the same finding on the next run.
+- **Digest history** — every run is recorded (counts + summary), so the team can
+  see how the risk picture changes between board meetings.
+
+This is the reason the app has a database at all. It runs on **SQLite by
+default** (zero setup). To run the *identical* SQLAlchemy layer on **Postgres**:
+
+```bash
+docker compose up -d
+echo 'DATABASE_URL=postgresql+psycopg://fgi:fgi@localhost:5433/fgi' >> backend/.env
+# restart the backend — tables are created automatically
+```
+
+---
+
 ## Design decisions
 
-- **In-memory store, not a database.** The data is small (~100 entities),
-  read-only, and re-derived from source on load (cached). A DB would add setup
-  friction with no benefit for this exercise; for production I'd move to
-  Postgres. *(The brief explicitly cares about reasoning over infrastructure.)*
+- **Input data in memory; workflow & history in a database.** The register is
+  small, read-only and re-derived on load — a DB buys nothing there. But the
+  *team's* state (finding status, run history) genuinely needs to persist, so
+  that goes in a database. SQLite by default for frictionless setup; the same
+  SQLAlchemy layer runs on Postgres via one env var. *(The brief cares about
+  reasoning over infrastructure — this is the reasoning: store what must
+  survive a restart, not what can be recomputed.)*
 - **Deterministic core + LLM on top.** Facts are computed by rules; the LLM adds
   narrative and recommendations. Swapping the mock for Claude changes nothing
   upstream.
@@ -157,9 +188,11 @@ backend/app/
   ingestion/         CSV, JSON inbox, PDF letters, fuzzy matching, claim extraction
   risk/detectors.py  15 deterministic detectors (the source of truth)
   llm/               interface + mock (key-free) + Anthropic client
+  persistence/       Store over SQLAlchemy (SQLite default / Postgres)
   services/digest.py ingest → detect → LLM-enrich pipeline
   main.py            FastAPI routes
-frontend/src/        React + TS + Tailwind: Dashboard / Entities / Inbox / Letters
+frontend/src/        React + TS + Tailwind: Dashboard / Entities / Inbox / Letters / History
+docker-compose.yml   optional local Postgres
 data/                provided case data (CSV, JSON, 3 PDFs)
 documents/           case brief & working notes
 notebooks/           exploratory data analysis
