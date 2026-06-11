@@ -162,9 +162,9 @@ function FindingCard({
             )}
             <button
               onClick={toggleEvidence}
-              className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-700"
+              className="ml-auto rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
             >
-              {open ? "Hide data" : "Show data ▾"}
+              {open ? "Hide data ▴" : "Show data ▾"}
             </button>
             <select
               value={f.status}
