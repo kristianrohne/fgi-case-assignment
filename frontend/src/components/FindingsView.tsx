@@ -17,6 +17,12 @@ const REGION: Record<string, string> = {
   Australia: "Asia-Pacific",
 };
 
+// Anything not in the map (e.g. the fabricated "Noveria", or a typo'd country)
+// is quarantined here rather than mixed in with real geography — mirroring the
+// fictional_jurisdiction detector that already flags it.
+const UNRECOGNISED = "Unrecognised";
+const regionOf = (j: string | null | undefined): string => (j && REGION[j]) || UNRECOGNISED;
+
 type EntityMeta = { name: string; jurisdiction: string; region: string };
 
 export function FindingsView({
@@ -41,7 +47,7 @@ export function FindingsView({
       const m: Record<string, EntityMeta> = {};
       for (const e of list) {
         const j = e.jurisdiction ?? "";
-        m[e.entity_id] = { name: e.entity_name ?? "", jurisdiction: j, region: REGION[j] ?? "Other" };
+        m[e.entity_id] = { name: e.entity_name ?? "", jurisdiction: j, region: regionOf(j) };
       }
       setEntityMap(m);
     });
@@ -75,14 +81,14 @@ export function FindingsView({
     () =>
       region === "All"
         ? presentJurisdictions
-        : presentJurisdictions.filter((j) => (REGION[j] ?? "Other") === region),
+        : presentJurisdictions.filter((j) => regionOf(j) === region),
     [presentJurisdictions, region],
   );
 
   function changeRegion(r: string) {
     setRegion(r);
     // Drop a selected country that no longer belongs to the chosen region.
-    if (r !== "All" && jurisdiction !== "All" && (REGION[jurisdiction] ?? "Other") !== r) {
+    if (r !== "All" && jurisdiction !== "All" && regionOf(jurisdiction) !== r) {
       setJurisdiction("All");
     }
   }
@@ -175,7 +181,9 @@ export function FindingsView({
             >
               <option value="All">All countries</option>
               {countryOptions.map((j) => (
-                <option key={j}>{j}</option>
+                <option key={j} value={j}>
+                  {regionOf(j) === UNRECOGNISED ? `${j} ⚠` : j}
+                </option>
               ))}
             </select>
           )}
