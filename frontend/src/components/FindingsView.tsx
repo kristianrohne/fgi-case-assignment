@@ -23,6 +23,14 @@ const REGION: Record<string, string> = {
 const UNRECOGNISED = "Unrecognised";
 const regionOf = (j: string | null | undefined): string => (j && REGION[j]) || UNRECOGNISED;
 
+// Style for a multi-select filter chip (region / country): filled when selected.
+const selectChip = (on: boolean) =>
+  `rounded-full border px-3 py-1 text-xs font-medium transition ${
+    on
+      ? "border-indigo-300 bg-indigo-100 text-indigo-800"
+      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+  }`;
+
 type EntityMeta = { name: string; jurisdiction: string; region: string };
 
 export function FindingsView({
@@ -36,8 +44,8 @@ export function FindingsView({
   const [status, setStatus] = useState<FindingStatus | "All" | "unresolved">("unresolved");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [jurisdiction, setJurisdiction] = useState("All");
-  const [region, setRegion] = useState("All");
+  const [regions, setRegions] = useState<Set<string>>(new Set());
+  const [countries, setCountries] = useState<Set<string>>(new Set());
   const [entityMap, setEntityMap] = useState<Record<string, EntityMeta>>({});
 
   // Entities carry jurisdiction/region; findings only carry entity ids, so we
@@ -75,22 +83,48 @@ export function FindingsView({
     return [...s].sort();
   }, [findings, entityMap]);
 
-  // Country list is scoped to the chosen region, so the two filters can't
-  // contradict each other (e.g. South America + Germany).
+  // Country chips are scoped to the selected regions (union). No region selected
+  // = all countries available.
   const countryOptions = useMemo(
     () =>
-      region === "All"
+      regions.size === 0
         ? presentJurisdictions
-        : presentJurisdictions.filter((j) => regionOf(j) === region),
-    [presentJurisdictions, region],
+        : presentJurisdictions.filter((j) => regions.has(regionOf(j))),
+    [presentJurisdictions, regions],
   );
 
-  function changeRegion(r: string) {
-    setRegion(r);
-    // Drop a selected country that no longer belongs to the chosen region.
-    if (r !== "All" && jurisdiction !== "All" && regionOf(jurisdiction) !== r) {
-      setJurisdiction("All");
-    }
+  function toggleRegion(r: string) {
+    setRegions((prev) => {
+      const next = new Set(prev);
+      if (next.has(r)) next.delete(r);
+      else next.add(r);
+      return next;
+    });
+  }
+
+  // When the selected regions change, drop any selected country that is no
+  // longer inside one of them. (Effect, so rapid chip clicks can't clobber.)
+  useEffect(() => {
+    if (regions.size === 0) return;
+    setCountries((prev) => {
+      const kept = new Set([...prev].filter((j) => regions.has(regionOf(j))));
+      return kept.size === prev.size ? prev : kept;
+    });
+  }, [regions]);
+
+  function toggleCountry(c: string) {
+    setCountries((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  }
+
+  function clearLocation() {
+    setSearch("");
+    setRegions(new Set());
+    setCountries(new Set());
   }
 
   function toggleCategory(c: string) {
@@ -108,9 +142,10 @@ export function FindingsView({
     if (hidden.has(f.category)) return false;
     if (!(status === "All" || (status === "unresolved" ? f.status !== "resolved" : f.status === status)))
       return false;
-    if (jurisdiction !== "All" && !f.entity_ids.some((id) => entityMap[id]?.jurisdiction === jurisdiction))
+    if (regions.size > 0 && !f.entity_ids.some((id) => regions.has(entityMap[id]?.region ?? "")))
       return false;
-    if (region !== "All" && !f.entity_ids.some((id) => entityMap[id]?.region === region)) return false;
+    if (countries.size > 0 && !f.entity_ids.some((id) => countries.has(entityMap[id]?.jurisdiction ?? "")))
+      return false;
     if (q) {
       const hay = [
         f.title,
@@ -126,7 +161,7 @@ export function FindingsView({
     return true;
   });
 
-  const locationFilterActive = search !== "" || jurisdiction !== "All" || region !== "All";
+  const locationFilterActive = search !== "" || regions.size > 0 || countries.size > 0;
 
   return (
     <div className="space-y-4">
@@ -153,7 +188,7 @@ export function FindingsView({
           <span className="ml-auto text-sm text-slate-500">{filtered.length} shown</span>
         </div>
 
-        {/* Search + location filters. Dropdowns only list values that have findings. */}
+        {/* Search + Clear (Clear resets search, regions and countries). */}
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={search}
@@ -161,45 +196,39 @@ export function FindingsView({
             placeholder="Search entity, name or country…"
             className="w-60 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
           />
-          {presentRegions.length > 1 && (
-            <select
-              value={region}
-              onChange={(e) => changeRegion(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700"
-            >
-              <option value="All">All regions</option>
-              {presentRegions.map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
-          )}
-          {countryOptions.length > 0 && (
-            <select
-              value={jurisdiction}
-              onChange={(e) => setJurisdiction(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700"
-            >
-              <option value="All">All countries</option>
-              {countryOptions.map((j) => (
-                <option key={j} value={j}>
-                  {regionOf(j) === UNRECOGNISED ? `${j} ⚠` : j}
-                </option>
-              ))}
-            </select>
-          )}
           {locationFilterActive && (
             <button
-              onClick={() => {
-                setSearch("");
-                setJurisdiction("All");
-                setRegion("All");
-              }}
+              onClick={clearLocation}
               className="text-xs font-medium text-slate-500 hover:text-slate-700"
             >
               Clear
             </button>
           )}
         </div>
+
+        {/* Regions — multi-select. Pick several (e.g. Europe + South America). */}
+        {presentRegions.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-slate-400">Regions:</span>
+            {presentRegions.map((r) => (
+              <button key={r} onClick={() => toggleRegion(r)} className={selectChip(regions.has(r))}>
+                {r}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Countries — multi-select, scoped to the selected regions. */}
+        {countryOptions.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-slate-400">Countries:</span>
+            {countryOptions.map((j) => (
+              <button key={j} onClick={() => toggleCountry(j)} className={selectChip(countries.has(j))}>
+                {regionOf(j) === UNRECOGNISED ? `${j} ⚠` : j}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Clickable theme toggles — click a box to hide/show that category. */}
         <div className="flex flex-wrap items-center gap-2">
