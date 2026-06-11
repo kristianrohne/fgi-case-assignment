@@ -28,11 +28,18 @@ export function AiReviewView() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
-        <strong>Advisory, not verified.</strong> This asks the LLM to sweep the whole
-        register for concerns the deterministic rules might have missed. These are
-        <em> suggestions</em> — lower trust than the dashboard findings, shown separately,
-        and worth checking by hand. The model may also repeat things the rules already catch.
+      <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
+        <p>
+          <strong>Advisory — separate from the Dashboard digest.</strong> The digest's
+          findings come from deterministic rules and are the source of truth. This is an
+          independent, open-ended sweep where Claude looks for concerns those rules might
+          have missed. It is a different action, not a step in the digest.
+        </p>
+        <p>
+          Treat these as <em>leads to check by hand</em>, not facts. The model can repeat
+          things the rules already catch, and can get details on individual rows wrong —
+          verify against the data before acting on anything here.
+        </p>
       </div>
 
       <button
