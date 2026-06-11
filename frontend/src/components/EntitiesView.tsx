@@ -148,12 +148,16 @@ export function EntitiesView() {
                       <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{e.jurisdiction}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         {e.parent_entity_id ? (
-                          <span className="font-mono text-xs text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
+                          <button
+                            title="Filter by this parent"
+                            onClick={(ev) => { ev.stopPropagation(); setQ(e.parent_entity_id!); }}
+                            className="font-mono text-xs text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5 hover:bg-indigo-100 hover:text-indigo-900 transition-colors cursor-pointer"
+                          >
                             {e.parent_entity_id}
                             {e.ownership_pct != null && (
                               <span className="ml-1 text-indigo-400">· {e.ownership_pct}%</span>
                             )}
-                          </span>
+                          </button>
                         ) : (
                           <span className="text-xs text-slate-300">— root</span>
                         )}
@@ -169,7 +173,7 @@ export function EntitiesView() {
                       <tr key={`${e.entity_id}-detail`} className="bg-slate-50">
                         <td />
                         <td colSpan={9} className="px-3 pb-4 pt-2">
-                          <EntityDetail entity={e} />
+                          <EntityDetail entity={e} onFilterByParent={(id) => { setQ(id); setExpanded(new Set()); }} />
                         </td>
                       </tr>
                     )}
@@ -185,14 +189,24 @@ export function EntitiesView() {
 }
 
 /** Expanded detail card shown when a row is clicked. */
-function EntityDetail({ entity: e }: { entity: Entity }) {
+function EntityDetail({ entity: e, onFilterByParent }: { entity: Entity; onFilterByParent: (id: string) => void }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {/* Ownership */}
       <DetailSection title="Structure">
         <DL>
           <DT>Parent entity</DT>
-          <DD mono>{e.parent_entity_id ?? "—"}</DD>
+          <DD>
+            {e.parent_entity_id ? (
+              <button
+                onClick={() => onFilterByParent(e.parent_entity_id!)}
+                title="Filter by this parent"
+                className="font-mono text-indigo-700 hover:underline"
+              >
+                {e.parent_entity_id}
+              </button>
+            ) : "—"}
+          </DD>
           <DT>Ownership</DT>
           <DD>{e.ownership_pct != null ? `${e.ownership_pct}%` : "—"}</DD>
           <DT>Entity type</DT>
