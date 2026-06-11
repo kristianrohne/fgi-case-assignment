@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import type { Entity, Finding, FindingStatus, Severity } from "../types";
 import { Card, SeverityBadge, StatusBadge } from "./ui";
@@ -218,16 +218,13 @@ export function FindingsView({
           </div>
         )}
 
-        {/* Countries — multi-select, scoped to the selected regions. */}
+        {/* Countries — compact dropdown button, multi-select inside. */}
         {countryOptions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-slate-400">Countries:</span>
-            {countryOptions.map((j) => (
-              <button key={j} onClick={() => toggleCountry(j)} className={selectChip(countries.has(j))}>
-                {regionOf(j) === UNRECOGNISED ? `${j} ⚠` : j}
-              </button>
-            ))}
-          </div>
+          <CountryDropdown
+            options={countryOptions}
+            selected={countries}
+            onToggle={toggleCountry}
+          />
         )}
 
         {/* Clickable theme toggles — click a box to hide/show that category. */}
@@ -404,6 +401,79 @@ function FindingCard({
 function formatValue(v: unknown): string {
   if (v === null || v === undefined || v === "") return "—";
   return String(v);
+}
+
+// Compact country picker — a single pill button that shows the selection count
+// and opens a small checkbox list on click. Closes on outside click.
+function CountryDropdown({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: string[];
+  selected: Set<string>;
+  onToggle: (c: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function close(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  const label =
+    selected.size === 0
+      ? "All countries"
+      : selected.size === 1
+        ? [...selected][0]
+        : `${selected.size} countries`;
+
+  return (
+    <div ref={ref} className="relative flex items-center gap-2">
+      <span className="text-xs font-medium text-slate-400">Countries:</span>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition ${
+          selected.size > 0
+            ? "border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100"
+            : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+        }`}
+      >
+        {label}
+        <svg
+          className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+          viewBox="0 0 16 16" fill="currentColor"
+        >
+          <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-52 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          {options.map((j) => (
+            <label
+              key={j}
+              className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50"
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(j)}
+                onChange={() => onToggle(j)}
+                className="accent-indigo-600"
+              />
+              <span className={regionOf(j) === UNRECOGNISED ? "text-amber-700" : "text-slate-700"}>
+                {regionOf(j) === UNRECOGNISED ? `${j} ⚠` : j}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Segmented({
