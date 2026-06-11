@@ -157,6 +157,10 @@ echo 'DATABASE_URL=postgresql+psycopg://fgi:fgi@localhost:5433/fgi' >> backend/.
 # restart the backend — tables are created automatically
 ```
 
+`docker compose up -d` also starts **Adminer**, a web DB browser, at
+<http://localhost:8080> — log in with System `PostgreSQL`, Server `db`, user /
+password `fgi` / `fgi`, database `fgi` to click through the tables.
+
 ---
 
 ## Design decisions
