@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { BoardUpdate } from "../types";
 import { Card, Spinner } from "./ui";
@@ -7,6 +7,7 @@ export function InboxView() {
   const [updates, setUpdates] = useState<BoardUpdate[]>([]);
   const [loading, setLoading] = useState(true);
   const [unmatchedOnly, setUnmatchedOnly] = useState(false);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -16,18 +17,56 @@ export function InboxView() {
     });
   }, [unmatchedOnly]);
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return updates;
+    return updates.filter(
+      (u) =>
+        (u.entity_name ?? "").toLowerCase().includes(q) ||
+        (u.change_type ?? "").toLowerCase().includes(q) ||
+        (u.source ?? "").toLowerCase().includes(q) ||
+        (u.matched_entity_id ?? "").toLowerCase().includes(q),
+    );
+  }, [updates, search]);
+
   if (loading) return <Spinner label="Loading inbox…" />;
 
   return (
     <div className="space-y-4">
-      <label className="flex items-center gap-2 text-sm text-slate-600">
-        <input
-          type="checkbox"
-          checked={unmatchedOnly}
-          onChange={(e) => setUnmatchedOnly(e.target.checked)}
-        />
-        Show only unmatched (ghost) entities
-      </label>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search entity, change type, source…"
+            className="w-64 rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-1.5 text-sm placeholder-slate-400"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={unmatchedOnly}
+            onChange={(e) => setUnmatchedOnly(e.target.checked)}
+          />
+          Unmatched only
+        </label>
+        <span className="ml-auto text-sm text-slate-400">{filtered.length} of {updates.length}</span>
+      </div>
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -42,7 +81,7 @@ export function InboxView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {updates.map((u, i) => (
+              {filtered.map((u, i) => (
                 <tr key={i} className="hover:bg-slate-50">
                   <td className="whitespace-nowrap px-3 py-2 text-slate-500">
                     {u.date_parsed ?? u.date_raw ?? "—"}

@@ -453,23 +453,30 @@ function CountryDropdown({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-52 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-          {options.map((j) => (
-            <label
-              key={j}
-              className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50"
-            >
-              <input
-                type="checkbox"
-                checked={selected.has(j)}
-                onChange={() => onToggle(j)}
-                className="accent-indigo-600"
-              />
-              <span className={regionOf(j) === UNRECOGNISED ? "text-amber-700" : "text-slate-700"}>
-                {regionOf(j) === UNRECOGNISED ? `${j} ⚠` : j}
-              </span>
-            </label>
-          ))}
+        <div className="absolute left-0 top-full z-20 mt-1 w-52 rounded-lg border border-slate-200 bg-white shadow-lg">
+          {/* relative wrapper so the gradient sits on top of the list */}
+          <div className="relative">
+            <div className="country-scroll max-h-64 overflow-y-scroll py-1">
+              {options.map((j) => (
+                <label
+                  key={j}
+                  className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(j)}
+                    onChange={() => onToggle(j)}
+                    className="accent-indigo-600"
+                  />
+                  <span className={regionOf(j) === UNRECOGNISED ? "text-amber-700" : "text-slate-700"}>
+                    {regionOf(j) === UNRECOGNISED ? `${j} ⚠` : j}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {/* Bottom fade — signals that the list continues below the fold */}
+            <div className="pointer-events-none absolute bottom-0 inset-x-0 h-8 rounded-b-lg bg-gradient-to-t from-white to-transparent" />
+          </div>
         </div>
       )}
     </div>

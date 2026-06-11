@@ -8,6 +8,7 @@ import { InboxView } from "./components/InboxView";
 import { LettersView } from "./components/LettersView";
 import { HistoryView } from "./components/HistoryView";
 import { AiReviewView } from "./components/AiReviewView";
+import { GlobalSearch } from "./components/GlobalSearch";
 import { Spinner } from "./components/ui";
 import type { Finding } from "./types";
 
@@ -66,6 +67,7 @@ export default function App() {
             </p>
           </div>
           <div className="ml-auto flex items-center gap-3">
+            <GlobalSearch onNavigate={setTab} />
             {meta && (
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
                 LLM: {meta.llm_provider}
