@@ -9,15 +9,17 @@ import { LettersView } from "./components/LettersView";
 import { HistoryView } from "./components/HistoryView";
 import { AiReviewView } from "./components/AiReviewView";
 import { GlobalSearch } from "./components/GlobalSearch";
+import { HierarchyView } from "./components/HierarchyView";
 import { Spinner } from "./components/ui";
 import type { Finding } from "./types";
 
-type Tab = "dashboard" | "entities" | "inbox" | "letters" | "history" | "ai-review";
+type Tab = "dashboard" | "entities" | "structure" | "inbox" | "letters" | "history" | "ai-review";
 
-const TABS: Tab[] = ["dashboard", "entities", "inbox", "letters", "history", "ai-review"];
+const TABS: Tab[] = ["dashboard", "entities", "structure", "inbox", "letters", "history", "ai-review"];
 const TAB_LABELS: Record<Tab, string> = {
   dashboard: "Dashboard",
   entities: "Entities",
+  structure: "Structure",
   inbox: "Inbox",
   letters: "Letters",
   history: "History",
@@ -119,6 +121,7 @@ export default function App() {
           ))}
 
         {tab === "entities" && <EntitiesView />}
+        {tab === "structure" && <HierarchyView />}
         {tab === "inbox" && <InboxView />}
         {tab === "letters" && <LettersView />}
         {tab === "history" && <HistoryView />}
