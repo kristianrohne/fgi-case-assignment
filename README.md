@@ -163,6 +163,19 @@ password `fgi` / `fgi`, database `fgi` to click through the tables.
 
 ---
 
+## Tests
+
+```bash
+.venv/bin/pytest
+```
+
+31 tests covering the detectors (against the real data, with a pinned date),
+tolerant date parsing, fuzzy matching, letter-claim extraction, the persistence
+layer, and the API. They run on the mock LLM and an isolated SQLite db — no key,
+no network.
+
+---
+
 ## Design decisions
 
 - **Input data in memory; workflow & history in a database.** The register is

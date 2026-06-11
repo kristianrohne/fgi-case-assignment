@@ -20,8 +20,8 @@ from .dates import parse_date
 MATCH_THRESHOLD = 85.0
 
 _LEGAL_SUFFIXES = re.compile(
-    r"\b(b\.?v\.?|gmbh|s\.?l\.?|s\.?a\.?|aps|ab|ltd|co\.?\s*ltd|llc|corp\.?|"
-    r"plc|pte\.?\s*ltd|inc\.?|nv|oy|as|asa)\b",
+    r"\b(s\.?à\.?\s*r\.?\s*l\.?|b\.?v\.?|gmbh|s\.?l\.?|s\.?a\.?|aps|ab|ltd|"
+    r"co\.?\s*ltd|llc|corp\.?|plc|pte\.?\s*ltd|inc\.?|nv|oy|as|asa)\b",
     re.IGNORECASE,
 )
 

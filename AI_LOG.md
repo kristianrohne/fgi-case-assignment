@@ -53,12 +53,14 @@ the data, and I owned the architectural decisions.
   has passed even though its status label wasn't "Overdue". I kept the broader,
   more correct rule.
 - **The fuzzy-matching false-positive insight.** Naive name matching scores
-  "Aurora **Storage** Holdings" against "Aurora **Solar** Holdings" at 91, and
+  "Aurora **Storage** Holdings" against "Aurora **Solar** Holdings" at ~88, and
   "Singapore **Solar** III" against "Singapore **Hotel** III" at 87 — both above
   any sane threshold. These are *different businesses*. I added a check that
   flags a high-scoring match as a likely misidentification when the
   distinguishing word differs, so the tool doesn't quietly reconcile a ghost
-  entity to the wrong record.
+  entity to the wrong record. (Building the tests also surfaced that there are
+  *two* "Aurora Solar Holdings" entities — a GmbH and a S.à r.l. — which is why
+  the match can land on either; the point stands.)
 
 ## Honest assessment
 
