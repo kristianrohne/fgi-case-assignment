@@ -17,5 +17,14 @@ services:
     volumes:
       - fgi_pgdata:/var/lib/postgresql/data
 
+  # Web UI for the database — browse tables at http://localhost:8080
+  # Login: System=PostgreSQL, Server=db, User=fgi, Password=fgi, Database=fgi
+  adminer:
+    image: adminer:4
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
 volumes:
   fgi_pgdata:
