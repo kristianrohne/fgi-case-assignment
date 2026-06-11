@@ -1,10 +1,23 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { Entity, Finding, FindingStatus, Severity } from "../types";
 import { Card, SeverityBadge, StatusBadge } from "./ui";
 
 const SEVERITIES: Severity[] = ["Critical", "Warning", "Info"];
 const STATUSES: FindingStatus[] = ["open", "acknowledged", "assigned", "resolved"];
+
+// Jurisdiction → region. The fund is structured in Europe / Americas / Asia-
+// Pacific branches; the data has no region column, so we derive it here.
+const REGION: Record<string, string> = {
+  Netherlands: "Europe", Germany: "Europe", France: "Europe", Ireland: "Europe",
+  Luxembourg: "Europe", Spain: "Europe", Denmark: "Europe", Sweden: "Europe",
+  Switzerland: "Europe", Norway: "Europe", "United Kingdom": "Europe",
+  "USA (Delaware)": "North America", Canada: "North America", Brazil: "South America",
+  Singapore: "Asia-Pacific", Japan: "Asia-Pacific", "South Korea": "Asia-Pacific",
+  Australia: "Asia-Pacific",
+};
+
+type EntityMeta = { name: string; jurisdiction: string; region: string };
 
 export function FindingsView({
   findings,
@@ -16,6 +29,23 @@ export function FindingsView({
   const [severity, setSeverity] = useState<Severity | "All">("All");
   const [status, setStatus] = useState<FindingStatus | "All" | "unresolved">("unresolved");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+  const [jurisdiction, setJurisdiction] = useState("All");
+  const [region, setRegion] = useState("All");
+  const [entityMap, setEntityMap] = useState<Record<string, EntityMeta>>({});
+
+  // Entities carry jurisdiction/region; findings only carry entity ids, so we
+  // load the register once and map each finding to its entities' locations.
+  useEffect(() => {
+    api.entities().then((list) => {
+      const m: Record<string, EntityMeta> = {};
+      for (const e of list) {
+        const j = e.jurisdiction ?? "";
+        m[e.entity_id] = { name: e.entity_name ?? "", jurisdiction: j, region: REGION[j] ?? "Other" };
+      }
+      setEntityMap(m);
+    });
+  }, []);
 
   // Findings per category, for the toggle chips.
   const categoryCounts = useMemo(() => {
@@ -23,6 +53,39 @@ export function FindingsView({
     for (const f of findings) m.set(f.category, (m.get(f.category) ?? 0) + 1);
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [findings]);
+
+  // Only offer countries / regions that actually have findings.
+  const presentJurisdictions = useMemo(() => {
+    const s = new Set<string>();
+    for (const f of findings)
+      for (const id of f.entity_ids) if (entityMap[id]?.jurisdiction) s.add(entityMap[id].jurisdiction);
+    return [...s].sort();
+  }, [findings, entityMap]);
+
+  const presentRegions = useMemo(() => {
+    const s = new Set<string>();
+    for (const f of findings)
+      for (const id of f.entity_ids) if (entityMap[id]?.region) s.add(entityMap[id].region);
+    return [...s].sort();
+  }, [findings, entityMap]);
+
+  // Country list is scoped to the chosen region, so the two filters can't
+  // contradict each other (e.g. South America + Germany).
+  const countryOptions = useMemo(
+    () =>
+      region === "All"
+        ? presentJurisdictions
+        : presentJurisdictions.filter((j) => (REGION[j] ?? "Other") === region),
+    [presentJurisdictions, region],
+  );
+
+  function changeRegion(r: string) {
+    setRegion(r);
+    // Drop a selected country that no longer belongs to the chosen region.
+    if (r !== "All" && jurisdiction !== "All" && (REGION[jurisdiction] ?? "Other") !== r) {
+      setJurisdiction("All");
+    }
+  }
 
   function toggleCategory(c: string) {
     setHidden((prev) => {
@@ -33,13 +96,31 @@ export function FindingsView({
     });
   }
 
-  const filtered = findings.filter(
-    (f) =>
-      (severity === "All" || f.severity === severity) &&
-      !hidden.has(f.category) &&
-      (status === "All" ||
-        (status === "unresolved" ? f.status !== "resolved" : f.status === status)),
-  );
+  const q = search.trim().toLowerCase();
+  const filtered = findings.filter((f) => {
+    if (!(severity === "All" || f.severity === severity)) return false;
+    if (hidden.has(f.category)) return false;
+    if (!(status === "All" || (status === "unresolved" ? f.status !== "resolved" : f.status === status)))
+      return false;
+    if (jurisdiction !== "All" && !f.entity_ids.some((id) => entityMap[id]?.jurisdiction === jurisdiction))
+      return false;
+    if (region !== "All" && !f.entity_ids.some((id) => entityMap[id]?.region === region)) return false;
+    if (q) {
+      const hay = [
+        f.title,
+        f.detail,
+        ...f.entity_ids,
+        ...f.entity_ids.map((id) => entityMap[id]?.name ?? ""),
+        ...f.entity_ids.map((id) => entityMap[id]?.jurisdiction ?? ""),
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const locationFilterActive = search !== "" || jurisdiction !== "All" || region !== "All";
 
   return (
     <div className="space-y-4">
@@ -64,6 +145,52 @@ export function FindingsView({
             ))}
           </select>
           <span className="ml-auto text-sm text-slate-500">{filtered.length} shown</span>
+        </div>
+
+        {/* Search + location filters. Dropdowns only list values that have findings. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search entity, name or country…"
+            className="w-60 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+          />
+          {presentRegions.length > 1 && (
+            <select
+              value={region}
+              onChange={(e) => changeRegion(e.target.value)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700"
+            >
+              <option value="All">All regions</option>
+              {presentRegions.map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+          )}
+          {countryOptions.length > 0 && (
+            <select
+              value={jurisdiction}
+              onChange={(e) => setJurisdiction(e.target.value)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700"
+            >
+              <option value="All">All countries</option>
+              {countryOptions.map((j) => (
+                <option key={j}>{j}</option>
+              ))}
+            </select>
+          )}
+          {locationFilterActive && (
+            <button
+              onClick={() => {
+                setSearch("");
+                setJurisdiction("All");
+                setRegion("All");
+              }}
+              className="text-xs font-medium text-slate-500 hover:text-slate-700"
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {/* Clickable theme toggles — click a box to hide/show that category. */}
