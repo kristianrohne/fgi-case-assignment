@@ -31,6 +31,12 @@ After the deterministic rules were in place, I built a separate AI Review featur
 
 I kept this deliberately separate from the main findings, and clearly labelled as lower-trust. The reason: the model's observations here are not precise enough to act on directly. It might flag something genuinely interesting, or it might hallucinate a concern that isn't there. For decisions as consequential as governance actions on legal entities, that distinction matters. The right use of this feature is as a prompt for a human to go and look — not as an additional source of verified facts.
 
+# Phase 6 — Testing
+I ran tests throughout the process — both the automated backend test suite (pytest, 31 tests covering detectors, ingestion, fuzzy matching, persistence and the API) and manual UI testing. Manual testing was particularly useful: going through the interface as a user revealed bugs and confusing behaviour that would have been hard to catch any other way. Some of these required fixes to both frontend and backend. Testing the UI also gave indirect coverage of the backend and database layer.
+
+# Phase 7 — Repo structure, version control and git
+I used AI to help structure the repository, organise documentation, write commit messages and push changes to GitHub. Every meaningful change was committed with a descriptive message explaining the why, not just the what. There were no merge conflicts throughout the project — the branching and commit flow stayed clean from start to finish.
+
 # Summary
 AI was indispensable for breadth and speed — boilerplate, data analysis, turning unstructured text into structure. It was not reliable for exact counts or for trusting data at face value. I also used ChatGPT as a second opinion when unsure about an approach — to see whether a different model landed on the same answer or raised objections.
 
