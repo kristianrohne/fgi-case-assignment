@@ -34,7 +34,7 @@ export function LettersView() {
             </div>
             <button
               onClick={() => setOpen(open === letter.filename ? null : letter.filename)}
-              className="ml-auto text-sm text-indigo-600 hover:underline"
+              className="ml-auto text-sm text-blue-700 hover:underline"
             >
               {open === letter.filename ? "Hide original text" : "Show original text"}
             </button>

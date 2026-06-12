@@ -32,14 +32,41 @@ class MockLLMClient(LLMClient):
         crit = counts.get("Critical", 0)
         warn = counts.get("Warning", 0)
         info = counts.get("Info", 0)
-        top = [f.title for f in findings if f.severity == Severity.CRITICAL][:3]
-        top_line = ("Most urgent: " + "; ".join(top) + ".") if top else ""
-        return (
-            f"As of {as_of.isoformat()}, the register surfaced {len(findings)} "
-            f"issue(s): {crit} critical, {warn} warning, {info} informational. "
-            f"{top_line} "
-            "[Mock summary — set LLM_PROVIDER=anthropic for an AI-written digest.]"
-        ).strip()
+        total = len(findings)
+
+        # Para 1 — overall posture
+        if crit == 0:
+            posture = "no critical issues"
+        elif crit == 1:
+            posture = "1 critical issue requiring immediate attention"
+        else:
+            posture = f"{crit} critical issues requiring immediate attention"
+        para1 = (
+            f"As of {as_of.isoformat()}, the governance register surfaced {total} "
+            f"finding(s) across the portfolio: {posture}, {warn} warning(s), and "
+            f"{info} informational item(s)."
+        )
+
+        # Para 2 — top urgent items
+        top = [f for f in findings if f.severity == Severity.CRITICAL][:3]
+        if top:
+            items = "; ".join(f.title for f in top)
+            para2 = f"Priority items: {items}."
+        else:
+            warn_top = [f for f in findings if f.severity == Severity.WARNING][:2]
+            if warn_top:
+                items = "; ".join(f.title for f in warn_top)
+                para2 = f"Notable warnings: {items}."
+            else:
+                para2 = "No critical or warning-level items detected at this time."
+
+        # Para 3 — mock notice
+        para3 = (
+            "[Mock summary — set LLM_PROVIDER=anthropic for an AI-written narrative "
+            "with entity-specific context and board-ready language.]"
+        )
+
+        return f"{para1}\n\n{para2}\n\n{para3}"
 
     def recommend_for_findings(self, findings: list[Finding]) -> dict[str, str]:
         return {

@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { BoardUpdate, Entity, Finding } from "../types";
 
-type Tab = "dashboard" | "entities" | "inbox" | "letters" | "history" | "ai-review";
+type Tab = "dashboard" | "entities" | "map" | "inbox" | "letters" | "history" | "ai-review";
 
 type Hit =
   | { kind: "entity";  tab: "entities";  id: string; label: string; sub: string }
@@ -162,7 +162,7 @@ export function GlobalSearch({ onNavigate }: { onNavigate: (tab: Tab) => void })
           className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"
           fill="none" viewBox="0 0 24 24" stroke="currentColor"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
             d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         <input
@@ -171,18 +171,18 @@ export function GlobalSearch({ onNavigate }: { onNavigate: (tab: Tab) => void })
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => { ensureLoaded(); setOpen(true); }}
           placeholder="Search everything…"
-          className="w-52 rounded-lg border border-slate-300 bg-white pl-9 pr-8 py-1.5 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+          className="w-52 rounded border border-slate-600 bg-white/10 pl-9 pr-8 py-1.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
         />
         {/* Clear / keyboard hint */}
         {q ? (
           <button
             onClick={() => { setQ(""); inputRef.current?.focus(); }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs leading-none"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs leading-none"
           >
             ✕
           </button>
         ) : (
-          <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-mono text-slate-400 pointer-events-none select-none">
+          <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-slate-700 px-1 py-0.5 text-[10px] font-mono text-slate-400 pointer-events-none select-none">
             ⌘K
           </kbd>
         )}
@@ -190,7 +190,7 @@ export function GlobalSearch({ onNavigate }: { onNavigate: (tab: Tab) => void })
 
       {/* Dropdown */}
       {open && trimmed.length >= 2 && (
-        <div className="absolute right-0 top-full z-30 mt-1.5 w-80 rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+        <div className="absolute right-0 top-full z-30 mt-1.5 w-80 rounded border border-slate-200 bg-white shadow-md overflow-hidden">
           {loading && (
             <p className="px-4 py-3 text-sm text-slate-400">Loading index…</p>
           )}

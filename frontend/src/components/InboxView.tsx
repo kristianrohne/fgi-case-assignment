@@ -46,7 +46,7 @@ export function InboxView() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search entity, change type, source…"
-            className="w-64 rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-1.5 text-sm placeholder-slate-400"
+            className="w-64 rounded border border-slate-300 bg-white pl-9 pr-3 py-1.5 text-sm placeholder-slate-400"
           />
           {search && (
             <button

@@ -4,9 +4,9 @@ import type { ReviewNote } from "../types";
 import { Card, Spinner } from "./ui";
 
 const CONFIDENCE_STYLES: Record<string, string> = {
-  high: "bg-violet-100 text-violet-700",
-  medium: "bg-blue-100 text-blue-700",
-  low: "bg-slate-100 text-slate-600",
+  high: "bg-blue-100 text-blue-800",
+  medium: "bg-slate-100 text-slate-700",
+  low: "bg-slate-100 text-slate-500",
 };
 
 export function AiReviewView() {
@@ -28,7 +28,7 @@ export function AiReviewView() {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
+      <div className="space-y-2 rounded border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
         <p>
           <strong>Advisory — separate from the Dashboard digest.</strong> The digest's
           findings come from deterministic rules and are the source of truth. This is an
@@ -45,13 +45,13 @@ export function AiReviewView() {
       <button
         onClick={run}
         disabled={loading}
-        className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-60"
+        className="rounded bg-blue-700 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60"
       >
         {loading ? "Reviewing…" : notes ? "Run AI review again" : "Run AI review"}
       </button>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
       )}

@@ -11,7 +11,7 @@ const SEVERITY_STYLES: Record<Severity, string> = {
 export function SeverityBadge({ severity }: { severity: Severity }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${SEVERITY_STYLES[severity]}`}
+      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${SEVERITY_STYLES[severity]}`}
     >
       {severity}
     </span>
@@ -53,7 +53,7 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>
+    <div className={`rounded border border-slate-200 bg-white ${className}`}>
       {children}
     </div>
   );

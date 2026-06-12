@@ -25,9 +25,9 @@ const regionOf = (j: string | null | undefined): string => (j && REGION[j]) || U
 
 // Style for a multi-select filter chip (region / country): filled when selected.
 const selectChip = (on: boolean) =>
-  `rounded-full border px-3 py-1 text-xs font-medium transition ${
+  `rounded border px-2.5 py-1 text-xs font-medium transition ${
     on
-      ? "border-indigo-300 bg-indigo-100 text-indigo-800"
+      ? "border-blue-300 bg-blue-100 text-blue-800"
       : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
   }`;
 
@@ -175,7 +175,7 @@ export function FindingsView({
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as FindingStatus | "All" | "unresolved")}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm"
           >
             <option value="unresolved">Unresolved</option>
             <option value="All">All statuses</option>
@@ -194,7 +194,7 @@ export function FindingsView({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search entity, name or country…"
-            className="w-60 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            className="w-60 rounded border border-slate-300 px-3 py-1.5 text-sm"
           />
           {locationFilterActive && (
             <button
@@ -237,10 +237,10 @@ export function FindingsView({
                 key={c}
                 onClick={() => toggleCategory(c)}
                 title={off ? "Hidden — click to show" : "Visible — click to hide"}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                className={`rounded border px-2.5 py-1 text-xs font-medium transition ${
                   off
                     ? "border-slate-200 bg-white text-slate-400 line-through"
-                    : "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                    : "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
                 }`}
               >
                 {c} <span className="opacity-60">{n}</span>
@@ -336,9 +336,9 @@ function FindingCard({
           )}
 
           {f.recommendation && (
-            <div className="mt-3 rounded-lg bg-indigo-50 p-3 text-sm">
-              <span className="font-semibold text-indigo-700">Recommended action: </span>
-              <span className="text-indigo-900">{f.recommendation}</span>
+            <div className="mt-3 rounded border-l-4 border-l-blue-400 bg-slate-50 px-3 py-2 text-sm">
+              <span className="font-semibold text-slate-700">Recommended action: </span>
+              <span className="text-slate-600">{f.recommendation}</span>
             </div>
           )}
 
@@ -349,7 +349,7 @@ function FindingCard({
             )}
             <button
               onClick={toggleEvidence}
-              className="ml-auto rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
+              className="ml-auto rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
             >
               {open ? "Hide data ▴" : "Show data ▾"}
             </button>
@@ -368,7 +368,7 @@ function FindingCard({
           </div>
 
           {open && (
-            <div className="mt-3 space-y-3 rounded-lg bg-slate-50 p-3 text-xs">
+            <div className="mt-3 space-y-3 rounded bg-slate-50 p-3 text-xs">
               {entities?.map((e) => (
                 <div key={e.entity_id}>
                   <div className="mb-1 font-mono font-semibold text-slate-600">{e.entity_id}</div>
@@ -437,9 +437,9 @@ function CountryDropdown({
       <span className="text-xs font-medium text-slate-400">Countries:</span>
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition ${
+        className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-sm transition ${
           selected.size > 0
-            ? "border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100"
+            ? "border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100"
             : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
         }`}
       >
@@ -453,7 +453,7 @@ function CountryDropdown({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-52 rounded-lg border border-slate-200 bg-white shadow-lg">
+        <div className="absolute left-0 top-full z-20 mt-1 w-52 rounded border border-slate-200 bg-white shadow-md">
           {/* relative wrapper so the gradient sits on top of the list */}
           <div className="relative">
             <div className="country-scroll max-h-64 overflow-y-scroll py-1">
@@ -466,7 +466,7 @@ function CountryDropdown({
                     type="checkbox"
                     checked={selected.has(j)}
                     onChange={() => onToggle(j)}
-                    className="accent-indigo-600"
+                    className="accent-blue-700"
                   />
                   <span className={regionOf(j) === UNRECOGNISED ? "text-amber-700" : "text-slate-700"}>
                     {regionOf(j) === UNRECOGNISED ? `${j} ⚠` : j}
@@ -493,7 +493,7 @@ function Segmented({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5">
+    <div className="inline-flex rounded border border-slate-300 bg-white p-0.5">
       {options.map((opt) => (
         <button
           key={opt}

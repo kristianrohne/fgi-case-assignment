@@ -5,7 +5,13 @@ import { Card, Spinner, StatusPill } from "./ui";
 
 type SortKey = "entity_id" | "entity_name" | "annual_filing_due" | "board_mandate_expiry" | "ownership_pct";
 
-export function EntitiesView() {
+export function EntitiesView({
+  focusEntityId = "",
+  onFocusConsumed,
+}: {
+  focusEntityId?: string;
+  onFocusConsumed?: () => void;
+}) {
   const [entities, setEntities] = useState<Entity[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -21,6 +27,16 @@ export function EntitiesView() {
       setLoading(false);
     });
   }, []);
+
+  // When another view navigates here with a specific entity, apply it as the
+  // search filter and expand that row, then signal the parent to clear the focus
+  // so navigating away and back doesn't re-apply it.
+  useEffect(() => {
+    if (!focusEntityId) return;
+    setQ(focusEntityId);
+    setExpanded(new Set([focusEntityId]));
+    onFocusConsumed?.();
+  }, [focusEntityId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const jurisdictions = useMemo(
     () => ["All", ...Array.from(new Set(entities.map((e) => e.jurisdiction).filter(Boolean))).sort()],
@@ -80,7 +96,7 @@ export function EntitiesView() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search name, ID, parent, agent…"
-            className="w-60 rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-1.5 text-sm placeholder-slate-400"
+            className="w-60 rounded border border-slate-300 bg-white pl-9 pr-3 py-1.5 text-sm placeholder-slate-400"
           />
           {q && (
             <button onClick={() => setQ("")}
@@ -151,7 +167,7 @@ export function EntitiesView() {
                           <button
                             title="Filter by this parent"
                             onClick={(ev) => { ev.stopPropagation(); setQ(e.parent_entity_id!); }}
-                            className="font-mono text-xs text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5 hover:bg-indigo-100 hover:text-indigo-900 transition-colors cursor-pointer"
+                            className="font-mono text-xs text-blue-800 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100 transition-colors cursor-pointer"
                           >
                             {e.parent_entity_id}
                             {e.ownership_pct != null && (
@@ -201,7 +217,7 @@ function EntityDetail({ entity: e, onFilterByParent }: { entity: Entity; onFilte
               <button
                 onClick={() => onFilterByParent(e.parent_entity_id!)}
                 title="Filter by this parent"
-                className="font-mono text-indigo-700 hover:underline"
+                className="font-mono text-blue-700 hover:underline"
               >
                 {e.parent_entity_id}
               </button>
@@ -262,7 +278,7 @@ function EntityDetail({ entity: e, onFilterByParent }: { entity: Entity; onFilte
 
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
+    <div className="rounded border border-slate-200 bg-white p-3">
       <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{title}</div>
       {children}
     </div>
@@ -321,7 +337,7 @@ function Select({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700"
+        className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700"
       >
         {options.map((o) => (
           <option key={o}>{o}</option>

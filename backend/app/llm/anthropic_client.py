@@ -60,9 +60,15 @@ class AnthropicLLMClient(LLMClient):
             "findings": [_finding_brief(f) for f in findings],
         }
         prompt = (
-            "Write a 4-6 sentence board-ready summary of the governance posture "
-            "from these findings. Lead with the most urgent items. Return plain "
-            "prose only: no markdown, no headings, no bullet points, no title.\n\n"
+            "Write a board-ready governance digest in exactly three short paragraphs "
+            "separated by a blank line (\\n\\n). No markdown, no bullet points, no "
+            "headings, no title. Paragraph structure:\n"
+            "1. Overall posture (1-2 sentences): total findings count, severity breakdown, "
+            "and general portfolio health.\n"
+            "2. Priority items (2-3 sentences): name the most urgent findings and the "
+            "specific entities affected.\n"
+            "3. Recommended actions (1-2 sentences): the two or three most important "
+            "concrete steps the legal team should take this week.\n\n"
             + json.dumps(payload)
         )
         resp = self._client.messages.create(
@@ -72,9 +78,20 @@ class AnthropicLLMClient(LLMClient):
             messages=[{"role": "user", "content": prompt}],
         )
         text = "".join(b.text for b in resp.content if b.type == "text").strip()
-        # Defensively drop any leading markdown heading line the model may add.
+        # Defensively drop any leading markdown heading lines the model may add.
         lines = [ln for ln in text.splitlines() if not ln.lstrip().startswith("#")]
-        return "\n".join(lines).strip()
+        # Normalise: collapse 3+ consecutive blank lines to 2 (one blank line separator).
+        cleaned: list[str] = []
+        blank_run = 0
+        for ln in lines:
+            if ln.strip() == "":
+                blank_run += 1
+                if blank_run <= 1:
+                    cleaned.append(ln)
+            else:
+                blank_run = 0
+                cleaned.append(ln)
+        return "\n".join(cleaned).strip()
 
     def recommend_for_findings(self, findings: list[Finding]) -> dict[str, str]:
         if not findings:
