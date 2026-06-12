@@ -48,3 +48,41 @@ def test_letter_extraction_pulls_real_name_and_date():
     assert len(claims) == 1
     assert claims[0].entity_name_raw == "FGI Oslo Retail II"
     assert "2026-07-01" in claims[0].claimed_dates
+
+
+def test_fuzzy_match_scores_similar_names_above_threshold():
+    """Aurora Storage Holdings scores above the match threshold against Aurora Solar Holdings.
+
+    The names are structurally near-identical (differ only in one word), so the
+    raw similarity is ~86 — above the 85 threshold. The matcher accepts it.
+    The misidentification is then caught *downstream* by the risk detector, which
+    checks whether the distinguishing keyword differs and flags it as a likely
+    false match. This test pins the matcher's behaviour; the detector test
+    (test_letter_false_match_flagged_as_misidentification) pins the flagging.
+    """
+    from backend.app.ingestion.board_updates import (
+        MATCH_THRESHOLD,
+        _similarity,
+        match_updates,
+        normalize_name,
+    )
+    from backend.app.models import BoardUpdate, Entity
+
+    score = _similarity(
+        normalize_name("Aurora Storage Holdings"),
+        normalize_name("Aurora Solar Holdings GmbH"),
+    )
+    # Score is above threshold — the matcher will accept this match
+    assert score >= MATCH_THRESHOLD
+
+    # Verify match_updates actually sets matched=True for this pair
+    upd = BoardUpdate(entity_name="Aurora Storage Holdings")
+    entities = [
+        Entity(entity_id="FGI-014", entity_name="Aurora Solar Holdings GmbH"),
+        Entity(entity_id="FGI-015", entity_name="Aurora Solar Holdings S.à r.l."),
+    ]
+    match_updates([upd], entities)
+    assert upd.matched is True
+    assert upd.matched_entity_id in {"FGI-014", "FGI-015"}
+    # Candidates must be populated so the detector can inspect them
+    assert len(upd.match_candidates) > 0
