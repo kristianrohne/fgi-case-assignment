@@ -95,12 +95,10 @@ const ISO_TO_JURISDICTION: Record<number, string> = {
 
 // ── Asset-class colour palette (same as HierarchyView) ───────────────────────
 const ASSET_PALETTE: Record<string, string> = {
-  "Real Estate":    "#059669",
-  "Infrastructure": "#3b82f6",
-  "Private Equity": "#7c3aed",
-  "Equity":         "#d97706",
-  "Fixed Income":   "#db2777",
-  "Cash":           "#16a34a",
+  "Real Estate":      "#059669",
+  "Renewable Energy": "#0ea5e9",
+  "Holding":          "#6366f1",
+  "Treasury":         "#f59e0b",
 };
 const MIXED_COLOR = "#64748b"; // slate — more than one dominant class
 
@@ -175,7 +173,7 @@ export function MapView({
   onNavigate,
   onNavigateToEntity,
 }: {
-  onNavigate: (tab: Tab) => void;
+  onNavigate: (tab: string) => void;
   onNavigateToEntity: (id: string) => void;
 }) {
   const [entities, setEntities] = useState<Entity[]>([]);
@@ -278,14 +276,15 @@ export function MapView({
   if (loading) return <Spinner label="Loading entities…" />;
 
   return (
-    <div className="flex gap-4" style={{ minHeight: 520 }}>
+    <div className="relative" style={{ minHeight: 520 }}>
 
-      {/* ── Map panel ──────────────────────────────────────────────────── */}
+      {/* ── Map panel — always fills full width, never resizes ─────────── */}
       <div
         ref={mapPanelRef}
-        className={`relative flex-1 rounded border border-slate-200 bg-[#f8fafc] overflow-hidden ${
+        className={`relative w-full rounded border border-slate-200 bg-[#f8fafc] overflow-hidden ${
           isFullscreen ? "flex flex-col" : ""
         }`}
+        style={{ minHeight: 520 }}
       >
         {/* Legend */}
         <div className="absolute left-3 top-3 z-10 rounded border border-slate-200 bg-white/90 px-3 py-2 text-xs backdrop-blur-sm">
@@ -549,10 +548,10 @@ export function MapView({
         </div>
       </div>
 
-      {/* ── Side panel (normal mode only) ──────────────────────────────── */}
+      {/* ── Side panel (normal mode only) — floats over the map ──────── */}
       {!isFullscreen && (
         selectedBubble ? (
-          <aside className="w-80 shrink-0 flex flex-col rounded border border-slate-200 bg-white overflow-hidden">
+          <aside className="absolute top-0 right-0 bottom-0 z-20 w-80 flex flex-col rounded-r border border-slate-200 bg-white shadow-xl overflow-hidden">
             <CountryPanel
               bubble={selectedBubble}
               highlightId={highlightId}
@@ -564,8 +563,10 @@ export function MapView({
           </aside>
         ) : (
           /* Placeholder when nothing selected */
-          <aside className="w-80 shrink-0 flex flex-col items-center justify-center rounded border border-dashed border-slate-200 bg-white text-center px-6 py-8">
-            <div className="text-3xl mb-3">🌍</div>
+          <aside className="absolute top-4 right-4 z-20 w-72 flex flex-col items-center justify-center rounded border border-dashed border-slate-200 bg-white/95 backdrop-blur-sm text-center px-6 py-8">
+            <svg className="h-8 w-8 text-slate-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253M3 12a8.959 8.959 0 01.284-2.253" />
+            </svg>
             <div className="text-sm font-medium text-slate-600">Click a bubble</div>
             <div className="mt-1 text-xs text-slate-400">
               Select a country to see all entities in that jurisdiction
@@ -607,7 +608,7 @@ function CountryPanel({
   highlightId: string | null;
   highlightRowRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void;
-  onNavigate: (tab: Tab) => void;
+  onNavigate: (tab: string) => void;
   onNavigateToEntity: (id: string) => void;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -740,9 +741,9 @@ function CountryPanel({
 
       {/* Footer */}
       <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-[10px] text-slate-400 shrink-0">
-        <span className="mr-1">🟢</span> Filed{" · "}
-        <span className="mr-1">🟡</span> Pending{" · "}
-        <span className="mr-1">🔴</span> Overdue · click a row to expand
+        <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 mr-1 align-middle" /> Filed{" · "}
+        <span className="inline-block h-2 w-2 rounded-full bg-amber-400 mr-1 align-middle" /> Pending{" · "}
+        <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-1 align-middle" /> Overdue · click a row to expand
       </div>
     </>
   );

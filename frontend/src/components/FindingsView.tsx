@@ -6,6 +6,13 @@ import { Card, SeverityBadge, StatusBadge } from "./ui";
 const SEVERITIES: Severity[] = ["Critical", "Warning", "Info"];
 const STATUSES: FindingStatus[] = ["open", "acknowledged", "assigned", "resolved"];
 
+const TEAM_MEMBERS = [
+  { name: "Legal Team", email: "legal@nbim.no" },
+  { name: "Compliance", email: "compliance@nbim.no" },
+  { name: "Portfolio Management", email: "portfolio@nbim.no" },
+  { name: "Risk & Governance", email: "risk@nbim.no" },
+];
+
 // Jurisdiction → region. The fund is structured in Europe / Americas / Asia-
 // Pacific branches; the data has no region column, so we derive it here.
 const REGION: Record<string, string> = {
@@ -301,14 +308,33 @@ function FindingCard({
 
   async function changeStatus(next: FindingStatus) {
     setSaving(true);
-    // Keep any existing assignee/note when only the status changes.
-    const assignee = next === "assigned" && !f.assignee ? prompt("Assign to:") || null : f.assignee;
     try {
-      await api.setFindingStatus(f.id, { status: next, assignee, note: f.note });
-      onStatusChange(f.id, { status: next, assignee });
+      await api.setFindingStatus(f.id, { status: next, assignee: f.assignee, note: f.note });
+      onStatusChange(f.id, { status: next });
     } finally {
       setSaving(false);
     }
+  }
+
+  async function changeAssignee(name: string | null) {
+    setSaving(true);
+    const nextStatus: FindingStatus = name && f.status === "open" ? "assigned" : f.status;
+    try {
+      await api.setFindingStatus(f.id, { status: nextStatus, assignee: name, note: f.note });
+      onStatusChange(f.id, { status: nextStatus, assignee: name });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function sendEmail() {
+    const member = TEAM_MEMBERS.find((m) => m.name === f.assignee);
+    const to = member?.email ?? "";
+    const subject = encodeURIComponent(`[FGI Review] ${f.severity}: ${f.title}`);
+    const body = encodeURIComponent(
+      `Finding: ${f.title}\nSeverity: ${f.severity}\nEntities: ${f.entity_ids.join(", ")}\n\n${f.detail}${f.recommendation ? `\n\nRecommended action:\n${f.recommendation}` : ""}`,
+    );
+    window.open(`mailto:${to}?subject=${subject}&body=${body}`);
   }
 
   return (
@@ -344,9 +370,39 @@ function FindingCard({
 
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
             <StatusBadge status={f.status} />
+
+            {/* Assignee dropdown */}
+            <select
+              value={f.assignee ?? ""}
+              disabled={saving}
+              onChange={(e) => changeAssignee(e.target.value || null)}
+              className={`rounded-md border px-2 py-1 text-xs disabled:opacity-50 ${
+                f.assignee
+                  ? "border-blue-300 bg-blue-50 text-blue-800"
+                  : "border-slate-300 bg-white text-slate-400"
+              }`}
+            >
+              <option value="">Assign to…</option>
+              {TEAM_MEMBERS.map((m) => (
+                <option key={m.name} value={m.name}>{m.name}</option>
+              ))}
+            </select>
+
+            {/* Email button — only shown when someone is assigned */}
             {f.assignee && (
-              <span className="text-xs text-slate-500">→ {f.assignee}</span>
+              <button
+                onClick={sendEmail}
+                title={`Email ${f.assignee}`}
+                className="flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                  <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                </svg>
+                Email
+              </button>
             )}
+
             <button
               onClick={toggleEvidence}
               className="ml-auto rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"

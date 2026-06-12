@@ -69,24 +69,28 @@ def _similarity(a: str, b: str) -> float:
 
 def match_updates(updates: list[BoardUpdate], entities: list[Entity]) -> None:
     """Resolve each update to an entity_id in place (best fuzzy match)."""
-    # Map normalized name -> entity_id. Duplicate names (FGI-014/015) collapse;
-    # that ambiguity is itself surfaced by the duplicate-name detector.
     norm_to_id: dict[str, str] = {}
+    norm_to_name: dict[str, str] = {}
     for ent in entities:
         norm = normalize_name(ent.entity_name)
         if norm:
             norm_to_id.setdefault(norm, ent.entity_id)
+            norm_to_name.setdefault(norm, ent.entity_name or ent.entity_id)
 
     for upd in updates:
         target = normalize_name(upd.entity_name)
         if not target:
             continue
-        best_norm, best_score = None, 0.0
-        for norm in norm_to_id:
-            score = _similarity(target, norm)
-            if score > best_score:
-                best_norm, best_score = norm, score
+        scored = sorted(
+            ((norm, _similarity(target, norm)) for norm in norm_to_id),
+            key=lambda x: x[1], reverse=True,
+        )
+        best_norm, best_score = scored[0] if scored else (None, 0.0)
         upd.match_score = best_score
+        upd.match_candidates = [
+            {"entity_id": norm_to_id[n], "entity_name": norm_to_name[n], "score": round(s, 1)}
+            for n, s in scored[:5]
+        ]
         if best_norm is not None and best_score >= MATCH_THRESHOLD:
             upd.matched_entity_id = norm_to_id[best_norm]
             upd.matched = True

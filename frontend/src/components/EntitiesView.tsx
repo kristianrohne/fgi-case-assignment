@@ -1,17 +1,46 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { Entity } from "../types";
-import { Card, Spinner, StatusPill } from "./ui";
+import type { Entity, Finding, Severity } from "../types";
+import { Card, InfoTip, Spinner, StatusPill, Th } from "./ui";
+
+const SEVERITY_STYLE: Record<Severity, string> = {
+  Critical: "bg-red-100 text-red-700 border-red-200",
+  Warning:  "bg-amber-100 text-amber-700 border-amber-200",
+  Info:     "bg-slate-100 text-slate-500 border-slate-200",
+};
 
 type SortKey = "entity_id" | "entity_name" | "annual_filing_due" | "board_mandate_expiry" | "ownership_pct";
+
+const TAB_LABEL: Record<string, string> = {
+  inbox: "Inbox",
+  letters: "Letters",
+  dashboard: "Dashboard",
+};
 
 export function EntitiesView({
   focusEntityId = "",
   onFocusConsumed,
+  findings = [],
+  returnToTab,
+  onReturn,
 }: {
   focusEntityId?: string;
   onFocusConsumed?: () => void;
+  findings?: Finding[];
+  returnToTab?: string | null;
+  onReturn?: () => void;
 }) {
+  // Build a map: entity_id → findings that mention it, keeping only the worst severity per entity.
+  const entityFindings = useMemo(() => {
+    const m: Record<string, Finding[]> = {};
+    for (const f of findings) {
+      for (const id of f.entity_ids) {
+        if (!m[id]) m[id] = [];
+        m[id].push(f);
+      }
+    }
+    return m;
+  }, [findings]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -84,6 +113,18 @@ export function EntitiesView({
 
   return (
     <div className="space-y-4">
+      {/* Back button — shown when navigated here from another tab */}
+      {returnToTab && onReturn && (
+        <button
+          onClick={onReturn}
+          className="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 shadow-sm hover:bg-slate-50 transition"
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 4L6 8l4 4"/>
+          </svg>
+          Back to {TAB_LABEL[returnToTab] ?? returnToTab}
+        </button>
+      )}
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
@@ -120,27 +161,27 @@ export function EntitiesView({
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500 [&_th]:overflow-visible">
               <tr>
                 <Th />
-                <Th>ID</Th>
-                <Th>Name</Th>
-                <Th>Type</Th>
-                <Th>Jurisdiction</Th>
-                <Th>Parent · %</Th>
-                <Th>Status</Th>
-                <Th>Filing</Th>
-                <Th>Filing due</Th>
-                <Th>Mandate expiry</Th>
+                <Th tip="Internal register ID assigned to each subsidiary (e.g. FGI-001)." tipAlign="left">ID</Th>
+                <Th tip="Legal registered name of the entity. A blank name means the record was created without one — it cannot be matched against inbox or letters." tipAlign="left">Name</Th>
+                <Th tip="Legal form of the company — e.g. GmbH (Germany), B.V. (Netherlands), Ltd (UK), ApS (Denmark). Determined by the jurisdiction.">Type</Th>
+                <Th tip="Country or state where the entity is incorporated and registered.">Jurisdiction</Th>
+                <Th tip="The entity that directly owns this one, and the ownership percentage. Click the chip to filter the table by that parent. Entities without a parent are root nodes.">Parent · %</Th>
+                <Th tip="Legal life status of the entity. Active = trading. Dormant = legally exists but not trading. Dissolved = wound up. In liquidation = in the process of being wound down.">Status</Th>
+                <Th tip="Whether the annual accounts / tax filing has been submitted. Filed = done. Pending = not yet due. Overdue = past the deadline. Unknown = no information. Note: dissolved entities can still have outstanding filing obligations.">Filing</Th>
+                <Th tip="Deadline for the next statutory annual filing. Overdue items are a regulatory risk regardless of the entity's operational status." tipAlign="right">Filing due</Th>
+                <Th tip="Date when the current board mandate expires. An expired or soon-to-expire mandate means the directors may no longer have authority to act on behalf of the entity." tipAlign="right">Mandate expiry</Th>
+                {findings.length > 0 && <Th tip="Findings flagged by the AI digest that involve this entity. Shows the worst severity. Expand the row to see full details." tipAlign="right">Findings</Th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((e) => {
                 const isOpen = expanded.has(e.entity_id);
                 return (
-                  <>
+                  <Fragment key={e.entity_id}>
                     <tr
-                      key={e.entity_id}
                       onClick={() => toggleExpand(e.entity_id)}
                       className="cursor-pointer hover:bg-slate-50 transition-colors"
                       title="Click to expand details"
@@ -182,18 +223,23 @@ export function EntitiesView({
                       <td className="px-3 py-2"><FilingPill status={e.annual_filing_status} /></td>
                       <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{e.annual_filing_due ?? "—"}</td>
                       <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{e.board_mandate_expiry ?? "—"}</td>
+                      {findings.length > 0 && (
+                        <td className="px-3 py-2">
+                          <FindingBadges findings={entityFindings[e.entity_id] ?? []} />
+                        </td>
+                      )}
                     </tr>
 
                     {/* Expanded detail row */}
                     {isOpen && (
                       <tr key={`${e.entity_id}-detail`} className="bg-slate-50">
                         <td />
-                        <td colSpan={9} className="px-3 pb-4 pt-2">
-                          <EntityDetail entity={e} onFilterByParent={(id) => { setQ(id); setExpanded(new Set()); }} />
+                        <td colSpan={findings.length > 0 ? 10 : 9} className="px-3 pb-4 pt-2">
+                          <EntityDetail entity={e} onFilterByParent={(id) => { setQ(id); setExpanded(new Set()); }} findings={entityFindings[e.entity_id] ?? []} />
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -205,8 +251,9 @@ export function EntitiesView({
 }
 
 /** Expanded detail card shown when a row is clicked. */
-function EntityDetail({ entity: e, onFilterByParent }: { entity: Entity; onFilterByParent: (id: string) => void }) {
+function EntityDetail({ entity: e, onFilterByParent, findings = [] }: { entity: Entity; onFilterByParent: (id: string) => void; findings?: Finding[] }) {
   return (
+    <div className="space-y-3">
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {/* Ownership */}
       <DetailSection title="Structure">
@@ -271,6 +318,77 @@ function EntityDetail({ entity: e, onFilterByParent }: { entity: Entity; onFilte
         </DL>
       </DetailSection>
     </div>
+
+    {/* Findings from digest — only shown when digest has been run */}
+    {findings.length > 0 && (
+      <div className="rounded border border-slate-200 bg-white p-3">
+        <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+          Findings from digest ({findings.length})
+        </div>
+        <div className="space-y-2">
+          {findings.map((f) => <FindingRow key={f.id} finding={f} />)}
+        </div>
+      </div>
+    )}
+    </div>
+  );
+}
+
+// ── Finding row with collapsible evidence ────────────────────────────────────
+
+function FindingRow({ finding: f }: { finding: Finding }) {
+  const [showEvidence, setShowEvidence] = useState(false);
+  const evidenceEntries = Object.entries(f.evidence);
+
+  return (
+    <div className={`rounded border-l-4 px-3 py-2 text-xs ${
+      f.severity === "Critical"
+        ? "border-l-red-400 bg-red-50"
+        : f.severity === "Warning"
+          ? "border-l-amber-400 bg-amber-50"
+          : "border-l-slate-300 bg-slate-50"
+    }`}>
+      <div className="flex items-center gap-2">
+        <span className={`font-semibold ${
+          f.severity === "Critical" ? "text-red-700"
+          : f.severity === "Warning" ? "text-amber-700"
+          : "text-slate-600"
+        }`}>
+          {f.severity}
+        </span>
+        <span className="font-medium text-slate-800">{f.title}</span>
+        <span className="ml-auto text-slate-400">{f.category}</span>
+      </div>
+      <p className="mt-1 text-slate-600">{f.detail}</p>
+      {f.recommendation && (
+        <p className="mt-1 text-slate-500">
+          <span className="font-semibold">Action: </span>{f.recommendation}
+        </p>
+      )}
+      {evidenceEntries.length > 0 && (
+        <div className="mt-1.5">
+          <button
+            onClick={() => setShowEvidence((v) => !v)}
+            className="mt-0.5 inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:bg-slate-50"
+          >
+            <svg className="h-3 w-3 text-slate-400" fill="none" viewBox="0 0 16 16" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2H9a2 2 0 012-2M9 5V3" />
+            </svg>
+            {showEvidence ? "Hide evidence ▴" : "Show evidence ▾"}
+          </button>
+          {showEvidence && (
+            <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 rounded bg-white/70 px-2.5 py-2 border border-slate-200">
+              {evidenceEntries.map(([k, v]) => (
+                <div key={k} className="contents">
+                  <dt className="text-slate-400 capitalize whitespace-nowrap">{k.replace(/_/g, " ")}</dt>
+                  <dd className="text-slate-700 font-mono break-all">{String(v)}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -316,8 +434,27 @@ function FilingPill({ status }: { status: string | null }) {
   return <span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${cls}`}>{status}</span>;
 }
 
-function Th({ children }: { children?: React.ReactNode }) {
-  return <th className="px-3 py-2 font-semibold">{children}</th>;
+const SEVERITY_ORDER: Severity[] = ["Critical", "Warning", "Info"];
+
+/** Shows the worst-severity badge + a count if there are multiple findings. */
+function FindingBadges({ findings }: { findings: Finding[] }) {
+  if (findings.length === 0) return <span className="text-slate-300 text-xs">—</span>;
+
+  // Pick the worst severity present
+  const worst = SEVERITY_ORDER.find((s) => findings.some((f) => f.severity === s))!;
+  const label = worst === "Critical" ? "Critical" : worst === "Warning" ? "Warning" : "Info";
+
+  return (
+    <span
+      title={findings.map((f) => f.title).join("\n")}
+      className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-semibold ${SEVERITY_STYLE[worst]}`}
+    >
+      {label}
+      {findings.length > 1 && (
+        <span className="opacity-60">×{findings.length}</span>
+      )}
+    </span>
+  );
 }
 
 function Select({

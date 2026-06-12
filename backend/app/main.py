@@ -7,6 +7,7 @@ explicit "fetch digest" action.
 
 from __future__ import annotations
 
+from datetime import date
 from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException, Query
@@ -123,12 +124,14 @@ def list_findings(severity: str | None = None, category: str | None = None) -> l
 
 
 @app.post("/api/digest", response_model=Digest)
-def digest(use_llm: bool = True) -> Digest:
+def digest(use_llm: bool = True, as_of: date | None = None) -> Digest:
     """The headline action: full pipeline + LLM summary and recommendations.
 
+    Pass as_of=YYYY-MM-DD to simulate running on a different date (past or future).
     Each run is recorded for the history view."""
-    result = build_digest(_data(), use_llm=use_llm)
-    get_store().record_digest(result)
+    data = _data()
+    result = build_digest(data, use_llm=use_llm, today=as_of)
+    get_store().record_digest(result, entities=data.entities)
     return result
 
 

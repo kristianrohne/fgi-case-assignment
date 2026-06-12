@@ -100,13 +100,11 @@ backend/app/
 ## Asset-class colour palette (shared across Map + Structure)
 
 ```
-Real Estate:    #059669  (emerald)
-Infrastructure: #3b82f6  (blue)
-Private Equity: #8b5cf6  (violet)
-Equity:         #f59e0b  (amber)
-Fixed Income:   #ec4899  (pink)
-Cash:           #22c55e  (green)
-Mixed/unknown:  #64748b  (slate)
+Real Estate:      #059669  (emerald)
+Renewable Energy: #0ea5e9  (sky blue)
+Holding:          #6366f1  (indigo)
+Treasury:         #f59e0b  (amber)
+Mixed/unknown:    #64748b  (slate)
 ```
 
 ---

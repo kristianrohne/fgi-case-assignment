@@ -15,12 +15,10 @@ import { Spinner } from "./ui";
 // ── Asset-class colour palette ─────────────────────────────────────────────
 type Swatch = { dot: string; bg: string; text: string };
 const PALETTE: Record<string, Swatch> = {
-  "Real Estate":    { dot: "#059669", bg: "#d1fae5", text: "#064e3b" },
-  "Infrastructure": { dot: "#3b82f6", bg: "#dbeafe", text: "#1e3a8a" },
-  "Private Equity": { dot: "#8b5cf6", bg: "#ede9fe", text: "#4c1d95" },
-  "Equity":         { dot: "#f59e0b", bg: "#fef3c7", text: "#78350f" },
-  "Fixed Income":   { dot: "#ec4899", bg: "#fce7f3", text: "#831843" },
-  "Cash":           { dot: "#22c55e", bg: "#f0fdf4", text: "#14532d" },
+  "Real Estate":      { dot: "#059669", bg: "#d1fae5", text: "#064e3b" },
+  "Renewable Energy": { dot: "#0ea5e9", bg: "#e0f2fe", text: "#0c4a6e" },
+  "Holding":          { dot: "#6366f1", bg: "#ede9fe", text: "#3730a3" },
+  "Treasury":         { dot: "#f59e0b", bg: "#fef3c7", text: "#78350f" },
 };
 const DEF: Swatch = { dot: "#94a3b8", bg: "#f1f5f9", text: "#475569" };
 const sw = (ac: string | null | undefined): Swatch => (ac && PALETTE[ac]) ?? DEF;
@@ -79,21 +77,22 @@ function buildForest(entities: Entity[]): TNode[] {
 }
 
 // ── Search helpers ─────────────────────────────────────────────────────────
-function nodeMatches(n: TNode, q: string): boolean {
-  return (
+function nodeMatches(n: TNode, q: string, ac: string): boolean {
+  const textOk = !q || (
     (n.e.entity_name ?? "").toLowerCase().includes(q) ||
     n.e.entity_id.toLowerCase().includes(q) ||
     (n.e.jurisdiction ?? "").toLowerCase().includes(q) ||
     (n.e.asset_class ?? "").toLowerCase().includes(q) ||
     (n.e.status ?? "").toLowerCase().includes(q)
   );
+  const classOk = !ac || n.e.asset_class === ac;
+  return textOk && classOk;
 }
 
-/** True if this node or any descendant matches the query. */
-function subtreeMatches(n: TNode, q: string): boolean {
-  if (!q) return true;
-  if (nodeMatches(n, q)) return true;
-  return n.children.some(c => subtreeMatches(c, q));
+/** True if this node or any descendant matches both query and asset-class filter. */
+function subtreeMatches(n: TNode, q: string, ac: string): boolean {
+  if (nodeMatches(n, q, ac)) return true;
+  return n.children.some(c => subtreeMatches(c, q, ac));
 }
 
 function countAll(n: TNode): number {
@@ -106,8 +105,9 @@ export function HierarchyView() {
   const [loading, setLoading]   = useState(true);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [inited, setInited]     = useState(false);
-  const [search, setSearch]     = useState("");
-  const [selected, setSelected] = useState<{ e: Entity; isOrphan?: boolean; brokenRef?: string } | null>(null);
+  const [search, setSearch]       = useState("");
+  const [assetClass, setAssetClass] = useState("");
+  const [selected, setSelected]   = useState<{ e: Entity; isOrphan?: boolean; brokenRef?: string } | null>(null);
 
   useEffect(() => {
     api.entities().then(list => { setEntities(list); setLoading(false); });
@@ -135,6 +135,11 @@ export function HierarchyView() {
   }, [forest, inited]);
 
   const q = search.trim().toLowerCase();
+
+  const assetClasses = useMemo(() =>
+    Array.from(new Set(entities.map(e => e.asset_class).filter(Boolean) as string[])).sort(),
+    [entities],
+  );
 
   const orphanCount = useMemo(
     () => entities.filter(e => {
@@ -177,6 +182,18 @@ export function HierarchyView() {
           )}
         </div>
 
+        {/* Asset class filter */}
+        <select
+          value={assetClass}
+          onChange={e => setAssetClass(e.target.value)}
+          className="rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
+        >
+          <option value="">All asset classes</option>
+          {assetClasses.map(cls => (
+            <option key={cls} value={cls}>{cls}</option>
+          ))}
+        </select>
+
         <button onClick={() => setCollapsed(new Set())}
           className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition">
           Expand all
@@ -192,20 +209,6 @@ export function HierarchyView() {
           </span>
         )}
 
-        {/* Legend */}
-        <div className="ml-auto flex flex-wrap items-center gap-3">
-          {(Object.entries(PALETTE) as [string, Swatch][]).map(([cls, c]) => (
-            <span key={cls} className="flex items-center gap-1.5 text-xs" style={{ color: c.text }}>
-              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ background: c.dot }} />
-              {cls}
-            </span>
-          ))}
-          <span className="flex items-center gap-1.5 text-xs text-slate-500">
-            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-slate-300" />
-            Other
-          </span>
-        </div>
       </div>
 
       {/* Tree + detail panel side by side */}
@@ -215,7 +218,7 @@ export function HierarchyView() {
         <div className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white overflow-hidden">
           <div className="divide-y divide-slate-50">
             {forest.map(root =>
-              subtreeMatches(root, q) ? (
+              subtreeMatches(root, q, assetClass) ? (
                 <TreeNode
                   key={root.e.entity_id}
                   node={root}
@@ -225,13 +228,14 @@ export function HierarchyView() {
                   onSelect={sel => setSelected(sel)}
                   selectedId={selected?.e.entity_id ?? null}
                   q={q}
+                  ac={assetClass}
                 />
               ) : null
             )}
           </div>
-          {q && forest.every(r => !subtreeMatches(r, q)) && (
+          {(q || assetClass) && forest.every(r => !subtreeMatches(r, q, assetClass)) && (
             <p className="px-6 py-8 text-center text-sm text-slate-400">
-              No entities match <span className="font-medium text-slate-600">"{search}"</span>
+              No entities match the current filters
             </p>
           )}
         </div>
@@ -253,7 +257,7 @@ export function HierarchyView() {
 
 // ── Tree row ───────────────────────────────────────────────────────────────
 function TreeNode({
-  node: n, depth, collapsed, onToggle, onSelect, selectedId, q,
+  node: n, depth, collapsed, onToggle, onSelect, selectedId, q, ac,
 }: {
   node: TNode;
   depth: number;
@@ -262,13 +266,14 @@ function TreeNode({
   onSelect: (sel: { e: Entity; isOrphan?: boolean; brokenRef?: string }) => void;
   selectedId: string | null;
   q: string;
+  ac: string;
 }) {
   const hasKids  = n.children.length > 0;
   const isCol    = collapsed.has(n.e.entity_id);
   const swatch   = sw(n.e.asset_class);
-  const matches  = q ? nodeMatches(n, q) : false;
+  const matches  = nodeMatches(n, q, ac);
   const isActive = selectedId === n.e.entity_id;
-  const visible  = n.children.filter(c => !q || subtreeMatches(c, q));
+  const visible  = n.children.filter(c => subtreeMatches(c, q, ac));
 
   return (
     <div>
@@ -276,15 +281,13 @@ function TreeNode({
       <div
         onClick={() => onSelect({ e: n.e, isOrphan: n.isOrphan, brokenRef: n.brokenParentRef })}
         className={`group flex cursor-pointer items-center gap-2 py-2 pr-3 transition-colors
-          ${isActive  ? "bg-indigo-100 ring-1 ring-inset ring-indigo-200" :
-            matches   ? "bg-indigo-50 hover:bg-indigo-100" :
-                        "hover:bg-slate-50"}
-          ${n.isOrphan ? "border-l-2 border-amber-300" : "border-l-2 border-transparent"}`}
+          ${isActive  ? "bg-slate-100" : matches ? "bg-slate-50 hover:bg-slate-100" : "hover:bg-slate-50"}
+          ${n.isOrphan ? "border-l-2 border-amber-300" : isActive ? "border-l-2 border-slate-400" : "border-l-2 border-transparent"}`}
         style={{ paddingLeft: `${12 + depth * 28}px` }}
       >
-        {/* Expand/collapse chevron — stopPropagation so it doesn't select */}
+        {/* Expand/collapse chevron — leaf nodes get an empty spacer instead */}
         <span className="w-5 shrink-0 flex items-center justify-center">
-          {hasKids ? (
+          {hasKids && (
             <button
               onClick={ev => { ev.stopPropagation(); onToggle(n.e.entity_id); }}
               className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition"
@@ -294,16 +297,12 @@ function TreeNode({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 3l4 3-4 3" />
               </svg>
             </button>
-          ) : (
-            <span className="h-1.5 w-1.5 rounded-full bg-slate-200 mx-auto" />
           )}
         </span>
 
-        {/* Asset-class colour dot */}
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: swatch.dot }} />
 
         {/* Name */}
-        <span className={`font-medium text-sm ${isActive ? "text-indigo-900" : matches ? "text-indigo-800" : "text-slate-800"}`}>
+        <span className={`font-medium text-sm ${isActive ? "text-slate-900" : "text-slate-800"}`}>
           {highlight(n.e.entity_name ?? "—", q)}
         </span>
 
@@ -341,7 +340,7 @@ function TreeNode({
           </span>
         )}
 
-        <StatusDot status={n.e.status} />
+        <StatusPill status={n.e.status} />
 
         {isCol && hasKids && (
           <span className="text-xs text-slate-400">+{countAll(n) - 1}</span>
@@ -363,6 +362,7 @@ function TreeNode({
               onSelect={onSelect}
               selectedId={selectedId}
               q={q}
+              ac={ac}
             />
           ))}
         </div>
@@ -439,14 +439,13 @@ function EntityPanel({
         <Section title="Structure">
           <Row label="Entity type"  value={e.entity_type} />
           <Row label="Status">
-            <StatusDot status={e.status} />
-            <span className="ml-1.5">{e.status ?? "—"}</span>
+            <StatusPill status={e.status} />
           </Row>
           <Row label="Asset class"  value={e.asset_class} />
           <Row label="Asset"        value={e.asset_description} />
           <Row label="Parent">
             {e.parent_entity_id ? (
-              <span className="font-mono text-indigo-700">
+              <span className="font-mono text-slate-500">
                 {e.parent_entity_id}
                 {parentEntity && (
                   <span className="ml-1 font-sans text-slate-400 text-[10px] not-italic">
@@ -556,15 +555,17 @@ function highlight(text: string, q: string): React.ReactNode {
   );
 }
 
-function StatusDot({ status }: { status: string | null }) {
+function StatusPill({ status }: { status: string | null }) {
   if (!status) return null;
   const cls =
-    status === "Active"    ? "bg-emerald-500" :
-    status === "Dissolved" ? "bg-red-400" :
-    status === "Pending"   ? "bg-amber-400" :
-                             "bg-slate-300";
+    status === "Active"         ? "bg-emerald-100 text-emerald-800" :
+    status === "Dissolved"      ? "bg-red-100 text-red-700" :
+    status === "In liquidation" ? "bg-amber-100 text-amber-700" :
+    status === "Dormant"        ? "bg-slate-100 text-slate-600" :
+                                  "bg-slate-100 text-slate-500";
   return (
-    <span title={status}
-      className={`h-2 w-2 shrink-0 rounded-full ${cls}`} />
+    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>
+      {status}
+    </span>
   );
 }

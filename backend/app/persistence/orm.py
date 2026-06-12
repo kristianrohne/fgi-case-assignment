@@ -27,6 +27,9 @@ class DigestRunRow(Base):
     warning: Mapped[int] = mapped_column(Integer)
     info: Mapped[int] = mapped_column(Integer)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # JSON blob: counts by jurisdiction, status and asset class at run time.
+    # Lets the History tab show what the register looked like when each digest ran.
+    entity_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class FindingStatusRow(Base):

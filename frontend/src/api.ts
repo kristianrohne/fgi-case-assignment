@@ -39,7 +39,10 @@ export const api = {
       `/api/board-updates${unmatchedOnly ? "?unmatched_only=true" : ""}`,
     ),
   // The headline action: full pipeline + LLM summary & recommendations.
-  digest: () => postJSON<Digest>("/api/digest"),
+  digest: (asOf?: string) => {
+    const qs = asOf ? `?as_of=${asOf}` : "";
+    return postJSON<Digest>(`/api/digest${qs}`);
+  },
   digestRuns: () => getJSON<DigestRun[]>("/api/digest-runs"),
   aiReview: () => postJSON<ReviewNote[]>("/api/ai-review"),
   setFindingStatus: async (

@@ -29,13 +29,13 @@ React dashboard                ──►  severity-ranked findings, filters, ent
                                     browser, inbox & letter reconciliation
 ```
 
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full diagram.
+See [`documents/ARCHITECTURE.md`](documents/ARCHITECTURE.md) for the full diagram.
 
 The headline design choice: **the detectors produce the facts; the LLM only
 explains and recommends.** Every risk is reproducible from the data with no
 model in the loop, which makes the tool trustworthy and makes "what the AI did
 vs. what the rules did" an easy story to tell. See
-[`AI_LOG.md`](AI_LOG.md) for the full process narrative.
+[`documents/AI_LOG.md`](documents/AI_LOG.md) for the full process narrative.
 
 A second principle: **we flag, we never auto-correct.** A dissolved entity that
 still lists a board is surfaced for a human — not silently "fixed".
@@ -202,9 +202,6 @@ no network.
 ```
 fgi-case-assignment/
 ├── README.md                  this file
-├── ARCHITECTURE.md            one-page diagram of the whole system
-├── BACKEND.md                 module-by-module backend walkthrough
-├── AI_LOG.md                  how AI was used (and where I corrected it)
 ├── docker-compose.yml         optional local Postgres + Adminer (DB browser)
 ├── pytest.ini                 test config
 ├── .python-version            pins Python 3.11
@@ -247,12 +244,13 @@ fgi-case-assignment/
 │                               History · AI review (+ shared ui.tsx)
 │
 ├── data/                      provided case data (CSV, JSON, 3 PDF letters)
-├── documents/                 case brief & working notes
+├── documents/                 ARCHITECTURE.md · BACKEND.md · AI_LOG.md · DATA_STORAGE.md + case brief & notes
 └── notebooks/                 exploratory data analysis (EDA)
 ```
 
 ## Documentation
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the system at a glance (diagram + principles)
-- [`BACKEND.md`](BACKEND.md) — closer walkthrough: data flow, fuzzy matching, request lifecycle
-- [`AI_LOG.md`](AI_LOG.md) — where AI helped, where it got things wrong, and where I stepped in
+- [`documents/ARCHITECTURE.md`](documents/ARCHITECTURE.md) — the system at a glance (diagram + principles)
+- [`documents/BACKEND.md`](documents/BACKEND.md) — closer walkthrough: data flow, fuzzy matching, request lifecycle
+- [`documents/DATA_STORAGE.md`](documents/DATA_STORAGE.md) — data storage design and production evolution
+- [`documents/AI_LOG.md`](documents/AI_LOG.md) — where AI helped, where it got things wrong, and where I stepped in

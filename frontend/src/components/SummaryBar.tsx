@@ -38,7 +38,9 @@ export function SummaryBar({ digest }: { digest: Digest }) {
         <Card className="overflow-hidden">
           {/* Header */}
           <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3">
-            <span className="text-base">🤖</span>
+            <svg className="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+            </svg>
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               AI digest summary
             </span>

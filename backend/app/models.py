@@ -66,6 +66,8 @@ class BoardUpdate(BaseModel):
     matched_entity_id: Optional[str] = None
     match_score: Optional[float] = None  # 0-100 fuzzy confidence
     matched: bool = False
+    # Top candidates when unmatched (id, name, score), sorted by score desc.
+    match_candidates: list[dict] = Field(default_factory=list)
 
 
 class LetterClaim(BaseModel):
@@ -84,6 +86,8 @@ class LetterClaim(BaseModel):
     matched_entity_id: Optional[str] = None
     match_score: Optional[float] = None
     matched: bool = False
+    # Top candidates when unmatched (id, name, score), sorted by score desc.
+    match_candidates: list[dict] = Field(default_factory=list)
 
 
 class Letter(BaseModel):
@@ -166,3 +170,5 @@ class DigestRun(BaseModel):
     warning: int
     info: int
     summary: Optional[str] = None
+    # Snapshot of the entity register at run time: counts by jurisdiction, status, asset class.
+    entity_snapshot: Optional[dict] = None

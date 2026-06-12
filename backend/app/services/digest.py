@@ -54,8 +54,8 @@ def _counts(findings: list[Finding]) -> dict:
     }
 
 
-def build_digest(result: IngestResult | None = None, *, use_llm: bool = True) -> Digest:
-    today = settings.today
+def build_digest(result: IngestResult | None = None, *, use_llm: bool = True, today: date | None = None) -> Digest:
+    today = today or settings.today
     result = result or ingest()
     findings = compute_findings(result, today)
     counts = _counts(findings)

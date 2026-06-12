@@ -104,21 +104,27 @@ def extract_claims(letter: Letter) -> list[LetterClaim]:
 
 def match_claims(claims: list[LetterClaim], entities: list[Entity]) -> None:
     norm_to_id: dict[str, str] = {}
+    norm_to_name: dict[str, str] = {}
     for ent in entities:
         norm = normalize_name(ent.entity_name)
         if norm:
             norm_to_id.setdefault(norm, ent.entity_id)
+            norm_to_name.setdefault(norm, ent.entity_name or ent.entity_id)
 
     for claim in claims:
         target = normalize_name(claim.entity_name_raw)
         if not target:
             continue
-        best_norm, best_score = None, 0.0
-        for norm in norm_to_id:
-            score = _similarity(target, norm)
-            if score > best_score:
-                best_norm, best_score = norm, score
+        scored = sorted(
+            ((norm, _similarity(target, norm)) for norm in norm_to_id),
+            key=lambda x: x[1], reverse=True,
+        )
+        best_norm, best_score = scored[0] if scored else (None, 0.0)
         claim.match_score = best_score
+        claim.match_candidates = [
+            {"entity_id": norm_to_id[n], "entity_name": norm_to_name[n], "score": round(s, 1)}
+            for n, s in scored[:5]
+        ]
         if best_norm is not None and best_score >= MATCH_THRESHOLD:
             claim.matched_entity_id = norm_to_id[best_norm]
             claim.matched = True

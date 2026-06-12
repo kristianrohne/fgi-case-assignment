@@ -6,21 +6,33 @@
  * result navigates to the owning tab via the `onNavigate` callback.
  */
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { BoardUpdate, Entity, Finding } from "../types";
 
-type Tab = "dashboard" | "entities" | "map" | "inbox" | "letters" | "history" | "ai-review";
+type Tab = "dashboard" | "entities" | "structure" | "map" | "inbox" | "letters" | "history" | "ai-review";
 
 type Hit =
   | { kind: "entity";  tab: "entities";  id: string; label: string; sub: string }
   | { kind: "finding"; tab: "dashboard"; id: string; label: string; sub: string }
   | { kind: "inbox";   tab: "inbox";     id: string; label: string; sub: string };
 
-const KIND_ICON: Record<Hit["kind"], string> = {
-  entity:  "🏢",
-  finding: "⚠️",
-  inbox:   "📥",
+const KIND_ICON: Record<Hit["kind"], React.ReactNode> = {
+  entity: (
+    <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2M5 21H3M9 7h1m-1 4h1m4-4h1m-1 4h1M9 21v-4a1 1 0 011-1h4a1 1 0 011 1v4H9z" />
+    </svg>
+  ),
+  finding: (
+    <svg className="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+    </svg>
+  ),
+  inbox: (
+    <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+    </svg>
+  ),
 };
 const KIND_LABEL: Record<Hit["kind"], string> = {
   entity:  "Entity",
@@ -92,7 +104,7 @@ function search(
   return hits;
 }
 
-export function GlobalSearch({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
+export function GlobalSearch({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [entities, setEntities] = useState<Entity[]>([]);

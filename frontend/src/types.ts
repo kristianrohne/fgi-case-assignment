@@ -23,6 +23,12 @@ export interface Entity {
   asset_description: string | null;
 }
 
+export interface MatchCandidate {
+  entity_id: string;
+  entity_name: string;
+  score: number;
+}
+
 export interface BoardUpdate {
   date_raw: string | null;
   date_parsed: string | null;
@@ -33,6 +39,7 @@ export interface BoardUpdate {
   matched_entity_id: string | null;
   match_score: number | null;
   matched: boolean;
+  match_candidates: MatchCandidate[];
 }
 
 export interface LetterClaim {
@@ -46,6 +53,7 @@ export interface LetterClaim {
   matched_entity_id: string | null;
   match_score: number | null;
   matched: boolean;
+  match_candidates: MatchCandidate[];
 }
 
 export interface Letter {
@@ -78,6 +86,13 @@ export interface ReviewNote {
   confidence: string | null;
 }
 
+export interface EntitySnapshot {
+  total: number;
+  by_jurisdiction: Record<string, number>;
+  by_status: Record<string, number>;
+  by_asset_class: Record<string, number>;
+}
+
 export interface DigestRun {
   id: number;
   created_at: string;
@@ -87,6 +102,7 @@ export interface DigestRun {
   warning: number;
   info: number;
   summary: string | null;
+  entity_snapshot: EntitySnapshot | null;
 }
 
 export interface DigestCounts {

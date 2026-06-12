@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { BoardUpdate } from "../types";
-import { Card, Spinner } from "./ui";
+import { Card, MatchBadge, Spinner, Th } from "./ui";
 
-export function InboxView() {
+export function InboxView({ onEntityClick }: { onEntityClick?: (id: string) => void }) {
   const [updates, setUpdates] = useState<BoardUpdate[]>([]);
   const [loading, setLoading] = useState(true);
   const [unmatchedOnly, setUnmatchedOnly] = useState(false);
@@ -71,13 +71,13 @@ export function InboxView() {
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500 [&_th]:overflow-visible">
               <tr>
-                <th className="px-3 py-2 font-semibold">Date</th>
-                <th className="px-3 py-2 font-semibold">Entity (as received)</th>
-                <th className="px-3 py-2 font-semibold">Change</th>
-                <th className="px-3 py-2 font-semibold">Match</th>
-                <th className="px-3 py-2 font-semibold">Source</th>
+                <Th tip="Date the governance change was reported. Agents use inconsistent formats — the system normalises them automatically." tipAlign="left">Date</Th>
+                <Th tip="The entity name exactly as written in the agent's message, before any matching. May differ from the official name in the register.">Entity (as received)</Th>
+                <Th tip="The type of governance event: board member appointment or resignation, address change, or mandate renewal.">Change</Th>
+                <Th tip="The register entity the system matched this update to, plus a confidence score (0–100). Green = matched with sufficient confidence. Red = no confident match — could be a name variant, a typo, or a genuinely unknown entity.">Match</Th>
+                <Th tip="How the information arrived: direct email from a corporate service agent, a scanned physical letter, or a transcribed phone note." tipAlign="right">Source</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -89,18 +89,13 @@ export function InboxView() {
                   <td className="px-3 py-2 font-medium text-slate-800">{u.entity_name}</td>
                   <td className="px-3 py-2 text-slate-600">{u.change_type}</td>
                   <td className="px-3 py-2">
-                    {u.matched ? (
-                      <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-                        {u.matched_entity_id}
-                        {u.match_score != null && (
-                          <span className="text-emerald-600/70">({Math.round(u.match_score)})</span>
-                        )}
-                      </span>
-                    ) : (
-                      <span className="inline-flex rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
-                        unmatched
-                      </span>
-                    )}
+                    <MatchBadge
+                      matched={u.matched}
+                      matchedId={u.matched_entity_id}
+                      score={u.match_score}
+                      candidates={u.match_candidates ?? []}
+                      onEntityClick={onEntityClick}
+                    />
                   </td>
                   <td className="px-3 py-2 text-slate-500">{u.source}</td>
                 </tr>

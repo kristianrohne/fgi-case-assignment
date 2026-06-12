@@ -6,16 +6,20 @@ or sessions. One process-wide instance via get_store().
 
 from __future__ import annotations
 
+import json
+from collections import Counter
+
 from sqlalchemy import select
 
-from ..models import Digest, DigestRun, VALID_STATUSES
+from ..models import Digest, DigestRun, Entity, VALID_STATUSES
 from .db import SessionLocal
 from .orm import DigestRunRow, FindingStatusRow
 
 
 class Store:
-    def record_digest(self, digest: Digest) -> DigestRun:
+    def record_digest(self, digest: Digest, entities: list[Entity] | None = None) -> DigestRun:
         c = digest.counts
+        snapshot = _build_snapshot(entities) if entities else None
         row = DigestRunRow(
             as_of=digest.as_of,
             total=c.get("total", 0),
@@ -23,6 +27,7 @@ class Store:
             warning=c.get("Warning", 0),
             info=c.get("Info", 0),
             summary=digest.summary,
+            entity_snapshot=json.dumps(snapshot) if snapshot else None,
         )
         with SessionLocal() as s:
             s.add(row)
@@ -65,7 +70,18 @@ class Store:
             return _detach(row)
 
 
+def _build_snapshot(entities: list[Entity]) -> dict:
+    """Summarise the register at a point in time: counts by jurisdiction, status, asset class."""
+    return {
+        "total": len(entities),
+        "by_jurisdiction": dict(Counter(e.jurisdiction or "Unknown" for e in entities)),
+        "by_status": dict(Counter(e.status or "Unknown" for e in entities)),
+        "by_asset_class": dict(Counter(e.asset_class or "Unknown" for e in entities)),
+    }
+
+
 def _to_run(row: DigestRunRow) -> DigestRun:
+    snapshot = json.loads(row.entity_snapshot) if row.entity_snapshot else None
     return DigestRun(
         id=row.id,
         created_at=row.created_at.isoformat(),
@@ -75,6 +91,7 @@ def _to_run(row: DigestRunRow) -> DigestRun:
         warning=row.warning,
         info=row.info,
         summary=row.summary,
+        entity_snapshot=snapshot,
     )
 
 
