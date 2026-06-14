@@ -104,7 +104,13 @@ function search(
   return hits;
 }
 
-export function GlobalSearch({ onNavigate }: { onNavigate: (tab: string) => void }) {
+export function GlobalSearch({
+  onNavigate,
+  onNavigateToEntity,
+}: {
+  onNavigate: (tab: string) => void;
+  onNavigateToEntity?: (id: string) => void;
+}) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [entities, setEntities] = useState<Entity[]>([]);
@@ -161,7 +167,13 @@ export function GlobalSearch({ onNavigate }: { onNavigate: (tab: string) => void
   const hits = trimmed.length >= 2 ? search(trimmed, entities, findings, inbox) : [];
 
   function pick(hit: Hit) {
-    onNavigate(hit.tab);
+    // Entity hits focus the specific row in the Entities table; other kinds
+    // just switch to the owning tab.
+    if (hit.kind === "entity" && onNavigateToEntity) {
+      onNavigateToEntity(hit.id);
+    } else {
+      onNavigate(hit.tab);
+    }
     setOpen(false);
     setQ("");
   }

@@ -101,7 +101,7 @@ export default function App() {
             </p>
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <GlobalSearch onNavigate={navigate} />
+            <GlobalSearch onNavigate={navigate} onNavigateToEntity={navigateToEntity} />
             {/* Date override — simulate running on a different date */}
             <div className="flex items-center gap-1.5">
               <label className="text-xs text-slate-400 whitespace-nowrap">As of</label>
@@ -258,7 +258,7 @@ function EmptyState({ onFetch }: { onFetch: () => void }) {
             {
               step: "2 — Detect",
               icon: "M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
-              body: "Eight deterministic rule detectors scan for expired board mandates, overdue annual filings, dissolved entities still showing as active, orphaned parent references, unmatched inbox entries, ownership conflicts and more.",
+              body: "A suite of deterministic rule detectors scans for expired board mandates, overdue annual filings, dissolved entities still showing as active, orphaned parent references, unmatched inbox entries, ownership conflicts and more.",
             },
             {
               step: "3 — Summarise",

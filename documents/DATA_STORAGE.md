@@ -14,7 +14,7 @@ Located in the `data/` folder at the repo root.
 |---|---|---|
 | `data/subsidiaries.csv` | The full entity register — ~100 subsidiaries with legal name, jurisdiction, parent, status, asset class, board mandate dates, filing deadlines, etc. | Read fresh on every digest run. Parsed into `Entity` objects in memory. |
 | `data/board_updates.json` | Board-update notifications from corporate service agents. Each entry has a raw entity name, topic, and dates. | Read fresh on every request to `/inbox`. Entity names are fuzzy-matched to the register on ingest. |
-| `data/letters/` | One `.txt` file per agent letter. Each letter is free text extracted from a PDF. | Read fresh on every request to `/letters`. Entity name mentions are extracted and fuzzy-matched. |
+| `data/letters/` | One `.pdf` file per agent letter. Text is extracted from each PDF with `pdfplumber` on load. | Read fresh on every request to `/letters`. Entity name mentions are extracted and fuzzy-matched. |
 
 **Important:** these files are never written to by the application. To update the data (e.g. a new entity is registered, or a mandate date changes), you edit the file directly. The next digest run will pick up the change automatically.
 
@@ -42,6 +42,7 @@ One row per digest execution. Stored so the History tab can show what was found 
 | `warning` | integer | Warning findings count |
 | `info` | integer | Info findings count |
 | `summary` | text | The AI-generated governance summary |
+| `entity_snapshot` | text (JSON, nullable) | Counts by jurisdiction, status and asset class at run time — lets the History tab show what the register looked like on each run |
 
 ### `finding_status` — workflow state
 
@@ -49,8 +50,8 @@ One row per finding that has been acted on (open findings with no action taken h
 
 | Column | Type | Description |
 |---|---|---|
-| `finding_id` | string (PK) | Stable ID derived from the finding's content (e.g. `expired-mandate-FGI-007`) |
-| `status` | string | `open` / `in-review` / `resolved` |
+| `finding_id` | string (PK) | Stable ID derived from the finding's content (e.g. `mandate-FGI-002`) |
+| `status` | string | `open` / `acknowledged` / `assigned` / `resolved` |
 | `assignee` | string (nullable) | Who the finding is assigned to |
 | `note` | text (nullable) | Free-text note from the analyst |
 | `updated_at` | datetime | Last time the status was changed |
