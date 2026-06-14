@@ -11,7 +11,6 @@ import { AiReviewView } from "./components/AiReviewView";
 import { GlobalSearch } from "./components/GlobalSearch";
 import { HierarchyView } from "./components/HierarchyView";
 import { MapView } from "./components/MapView";
-import { Spinner } from "./components/ui";
 import type { Finding } from "./types";
 
 // Entities, Structure and Map are sub-views of the same "Entities" tab.
@@ -161,15 +160,13 @@ export default function App() {
 
         {/* ── Dashboard ── */}
         {tab === "dashboard" &&
-          (loadingDigest ? (
-            <Spinner label="Running ingestion → detectors → AI summary…" />
-          ) : digest ? (
+          (digest ? (
             <div className="space-y-6">
               <SummaryBar digest={digest} />
               <FindingsView findings={digest.findings} onStatusChange={updateFindingStatus} />
             </div>
           ) : (
-            <EmptyState onFetch={fetchDigest} />
+            <EmptyState onFetch={fetchDigest} onNavigate={navigate} loading={loadingDigest} />
           ))}
 
         {/* ── Entities (Table / Structure / Map) ── */}
@@ -223,7 +220,15 @@ export default function App() {
   );
 }
 
-function EmptyState({ onFetch }: { onFetch: () => void }) {
+function EmptyState({
+  onFetch,
+  onNavigate,
+  loading = false,
+}: {
+  onFetch: () => void;
+  onNavigate: (t: string) => void;
+  loading?: boolean;
+}) {
   return (
     <div className="space-y-6">
 
@@ -237,12 +242,27 @@ function EmptyState({ onFetch }: { onFetch: () => void }) {
           findings and recommend prioritised actions. Everything is auditable: raw data, detection logic
           and AI reasoning are all visible.
         </p>
-        <button
-          onClick={onFetch}
-          className="mt-6 rounded bg-blue-700 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-600 transition"
-        >
-          Run governance digest
-        </button>
+        {loading ? (
+          <div className="mt-6 flex flex-wrap items-center gap-3 rounded border border-blue-200 bg-blue-50 px-4 py-3">
+            <svg className="h-4 w-4 animate-spin text-blue-700" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span className="text-sm font-medium text-blue-800">
+              Running ingestion → detectors → AI summary…
+            </span>
+            <span className="text-xs text-blue-600/80">
+              Takes ~30s — explore the data below while it runs.
+            </span>
+          </div>
+        ) : (
+          <button
+            onClick={onFetch}
+            className="mt-6 rounded bg-blue-700 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-600 transition"
+          >
+            Run governance digest
+          </button>
+        )}
       </div>
 
       {/* How the pipeline works */}
@@ -286,17 +306,26 @@ function EmptyState({ onFetch }: { onFetch: () => void }) {
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">What you can explore now — before running the digest</h3>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            { tab: "Entities",   desc: "Full register of all ~100 subsidiaries. Filter by jurisdiction, status or asset class. Click any row for details." },
-            { tab: "Structure",  desc: "Ownership tree visualised as a collapsible hierarchy. Broken parent references are flagged in amber." },
-            { tab: "Map",        desc: "World map with entity counts per country. Click a country to see its subsidiaries, then drill into any entity." },
-            { tab: "Inbox",      desc: "Board-update notifications from corporate service agents. Each entry is fuzzy-matched to the register — unmatched items indicate potential ghost entities." },
-            { tab: "Letters",    desc: "Free-text PDF letters from external agents. Entity names are extracted and matched; conflicts drive reconciliation findings." },
-            { tab: "AI Review",  desc: "Open-ended advisory sweep: ask Claude to review the full register for anomalies beyond the rule-based detectors." },
-          ].map(({ tab, desc }) => (
-            <div key={tab} className="rounded border border-slate-200 bg-white px-4 py-3">
-              <div className="mb-1 text-sm font-semibold text-slate-700">{tab}</div>
+            { tab: "Entities",   to: "entities",  desc: "Full register of all ~100 subsidiaries. Filter by jurisdiction, status or asset class. Click any row for details." },
+            { tab: "Structure",  to: "structure", desc: "Ownership tree visualised as a collapsible hierarchy. Broken parent references are flagged in amber." },
+            { tab: "Map",        to: "map",       desc: "World map with entity counts per country. Click a country to see its subsidiaries, then drill into any entity." },
+            { tab: "Inbox",      to: "inbox",     desc: "Board-update notifications from corporate service agents. Each entry is fuzzy-matched to the register — unmatched items indicate potential ghost entities." },
+            { tab: "Letters",    to: "letters",   desc: "Free-text PDF letters from external agents. Entity names are extracted and matched; conflicts drive reconciliation findings." },
+            { tab: "AI Review",  to: "ai-review", desc: "Open-ended advisory sweep: ask Claude to review the full register for anomalies beyond the rule-based detectors." },
+          ].map(({ tab, to, desc }) => (
+            <button
+              key={tab}
+              onClick={() => onNavigate(to)}
+              className="group flex flex-col rounded border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50/40 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              <div className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-slate-700 group-hover:text-blue-800">
+                {tab}
+                <svg className="h-3.5 w-3.5 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
               <p className="text-xs leading-relaxed text-slate-500">{desc}</p>
-            </div>
+            </button>
           ))}
         </div>
       </div>
